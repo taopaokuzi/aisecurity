@@ -54,7 +54,7 @@
 
 | ID | 阶段 | 任务 | 实现状态 | 验收状态 | 启动条件 | 依赖 | 执行人 | 最近更新 | 任务文件 | 备注 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `TASK-001` | Gate 0 | 仓库脚手架与目录骨架 | `TODO` | `NOT_READY` | 无 | 无 | `TBD` | `2026-04-16` | [TASK-001-repo-scaffold.md](./TASK-001-repo-scaffold.md) | 初始化目录与基础工程文件 |
+| `TASK-001` | Gate 0 | 仓库脚手架与目录骨架 | `DONE` | `PASS` | 无 | 无 | `Codex` | `2026-04-16` | [TASK-001-repo-scaffold.md](./TASK-001-repo-scaffold.md) | 新增目录：`apps/api`、`apps/worker`、`apps/web`、`packages/domain`、`packages/application`、`packages/infrastructure`、`packages/policy`、`packages/prompts`、`packages/audit`、`migrations`、`tests/unit`、`tests/integration`、`tests/e2e`、`docker`；新增基础工程文件：`.gitignore`、`pyproject.toml`、`package.json`、`apps/web/package.json` 与各目录占位文件；命令：`sed`、`rg --files`、`find`、`mkdir -p`、`python3 -c`、`git status --short`；测试：配置文件解析通过；风险：仅完成仓库骨架，运行入口/Compose/配置样例待后续任务补齐；可进入验收：是；验收结果：目录、占位文件、基础工程文件与冻结文档检查通过 |
 | `TASK-002` | Gate 0 | 运行时入口与健康检查 | `TODO` | `NOT_READY` | `TASK-001=PASS` | `TASK-001` | `TBD` | `2026-04-16` | [TASK-002-runtime-entry-and-health.md](./TASK-002-runtime-entry-and-health.md) | FastAPI、Worker、Web 最小运行入口 |
 | `TASK-003` | Gate 0 | 本地开发编排与配置加载 | `TODO` | `NOT_READY` | `TASK-001=PASS` 且 `TASK-002=PASS` | `TASK-001`,`TASK-002` | `TBD` | `2026-04-16` | [TASK-003-local-dev-compose-and-config.md](./TASK-003-local-dev-compose-and-config.md) | Docker Compose、环境变量、README、本地启动链路 |
 | `TASK-004` | Gate 1 | 领域枚举与共享模型 | `TODO` | `NOT_READY` | `TASK-001=PASS` 且 `TASK-002=PASS` | `TASK-001`,`TASK-002` | `TBD` | `2026-04-16` | [TASK-004-domain-enums-and-shared-models.md](./TASK-004-domain-enums-and-shared-models.md) | 枚举、错误码、核心实体与状态常量 |

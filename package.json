@@ -1,0 +1,17 @@
+{
+  "name": "aisecurity",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Monorepo scaffold for the Agent Identity & Permission system",
+  "workspaces": [
+    "apps/web"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "web:dev": "npm --workspace @aisecurity/web run dev",
+    "web:build": "npm --workspace @aisecurity/web run build",
+    "web:lint": "npm --workspace @aisecurity/web run lint"
+  }
+}

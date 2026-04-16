@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Node / web
+node_modules/
+.next/
+out/
+npm-debug.log*
+pnpm-debug.log*
+yarn-error.log*
+
+# Build artifacts
+build/
+dist/
+coverage/
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# IDE / OS files
+.DS_Store
+.idea/
+.vscode/

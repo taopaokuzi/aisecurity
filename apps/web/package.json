@@ -1,0 +1,10 @@
+{
+  "name": "@aisecurity/web",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "echo \"TASK-002 will add the Next.js runtime entry.\"",
+    "build": "echo \"TASK-002 will add the Next.js build entry.\"",
+    "lint": "echo \"TASK-002 will add the Next.js lint entry.\""
+  }
+}
