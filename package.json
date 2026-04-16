@@ -10,8 +10,12 @@
     "node": ">=20"
   },
   "scripts": {
-    "web:dev": "npm --workspace @aisecurity/web run dev",
-    "web:build": "npm --workspace @aisecurity/web run build",
-    "web:lint": "npm --workspace @aisecurity/web run lint"
+    "api:dev": "python -m apps.api",
+    "worker:dev": "python -m apps.worker",
+    "worker:health": "python -m apps.worker.healthcheck",
+    "web:dev": "npm --prefix apps/web run dev",
+    "web:build": "npm --prefix apps/web run build",
+    "web:start": "npm --prefix apps/web run start",
+    "web:lint": "npm --prefix apps/web run lint"
   }
 }

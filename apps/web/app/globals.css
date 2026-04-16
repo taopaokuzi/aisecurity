@@ -1,0 +1,130 @@
+:root {
+  color-scheme: light;
+  --bg: #f4efe4;
+  --bg-accent: #fff9ef;
+  --ink: #1e1d1a;
+  --muted: #5f5a4f;
+  --line: rgba(30, 29, 26, 0.12);
+  --card: rgba(255, 249, 239, 0.8);
+  --shadow: 0 24px 60px rgba(76, 63, 34, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(203, 162, 92, 0.24), transparent 32%),
+    linear-gradient(180deg, var(--bg-accent), var(--bg));
+  color: var(--ink);
+}
+
+code {
+  font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+  font-size: 0.95rem;
+}
+
+.page-shell {
+  width: min(1120px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 72px 0 88px;
+}
+
+.hero {
+  max-width: 760px;
+  margin-bottom: 40px;
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #7b5b1f;
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: clamp(2.5rem, 6vw, 4.8rem);
+  line-height: 0.96;
+  letter-spacing: -0.04em;
+}
+
+.subtitle {
+  margin: 20px 0 0;
+  font-size: 1.05rem;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.card {
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+}
+
+.card-label {
+  margin: 0 0 12px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #926a1f;
+}
+
+.card-summary {
+  margin: 0 0 20px;
+  min-height: 72px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.detail-block {
+  display: grid;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.detail-block + .detail-block {
+  margin-top: 14px;
+}
+
+.detail-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 860px) {
+  .page-shell {
+    padding-top: 48px;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .card-summary {
+    min-height: 0;
+  }
+}
