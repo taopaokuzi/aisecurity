@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from fastapi import FastAPI
 
+from .approvals import router as approvals_router
 from .delegations import router as delegations_router
 from .errors import register_exception_handlers
 from .permission_requests import router as permission_requests_router
@@ -60,6 +61,7 @@ def create_app() -> FastAPI:
         return build_health_payload(started_at=started_at)
 
     register_exception_handlers(app)
+    app.include_router(approvals_router)
     app.include_router(delegations_router)
     app.include_router(permission_requests_router)
 

@@ -94,6 +94,17 @@ Task 10 完成了评估流程与 Evaluate API：
 - 增加覆盖主案例、跨部门、高敏资源、模糊请求和重复评估拒绝的单元测试与集成测试
 - 在任务总表中把 `TASK-010` 标记为 `DONE / PASS`
 
+## Task 11
+
+Task 11 完成了 Approval Adapter 与审批回调链路：
+
+- 在 `packages/infrastructure` 中新增 Approval Adapter、回调签名构造与来源校验器，默认提供 stub 审批提交实现
+- 在 `packages/application` 中新增审批提交与回调处理服务，负责 `approval_records` 落库、幂等回调处理和申请状态迁移
+- 在 `apps/api` 中新增 `POST /approvals/callback` 路由，并在 Evaluate 完成且需要人工审批时自动发起审批
+- 回调处理会先写入审批回调快照，再根据 `Approved` 或 `Rejected` 更新审批状态和申请状态，但不会直接把授权置为生效
+- 增加覆盖审批自动提交、审批通过、审批驳回、重复回调、非法签名和审批记录缺失的单元测试与集成测试
+- 在任务总表中把 `TASK-011` 标记为 `DONE / PASS`
+
 ## 环境准备
 
 1. 安装 Python 3.11、Node.js 20+、Docker、Docker Compose。

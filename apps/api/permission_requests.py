@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from packages.application import (
+    ApprovalSubmitInput,
     PermissionRequestCreateInput,
     PermissionRequestEvaluationInput,
     PermissionRequestEvaluationResult,
@@ -30,6 +31,7 @@ from packages.infrastructure import (
 from packages.policy import create_policy_engine
 
 from .dependencies import ApiRequestContext, get_db_session, get_request_context
+from .approvals import build_approval_service
 
 router = APIRouter(tags=["permission-requests"])
 
@@ -309,6 +311,17 @@ def evaluate_permission_request(
                 force_re_evaluate=payload.force_re_evaluate,
             )
         )
+        if evaluation.approval_status is ApprovalStatus.PENDING:
+            approval_service = build_approval_service(session)
+            approval_service.submit_approval_for_request(
+                ApprovalSubmitInput(
+                    permission_request_id=permission_request_id,
+                    request_id=context.request_id,
+                    operator_user_id=context.user_id,
+                    operator_type=context.operator_type,
+                    trace_id=context.trace_id,
+                )
+            )
         session.commit()
     except DomainError:
         session.commit()

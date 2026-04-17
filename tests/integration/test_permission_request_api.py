@@ -20,6 +20,7 @@ from apps.api.main import create_app
 from packages.infrastructure.db import Base
 from packages.infrastructure.db.models import (
     AgentIdentityRecord,
+    ApprovalRecordRecord,
     AuditRecordRecord,
     DelegationCredentialRecord,
     PermissionRequestEventRecord,
@@ -306,6 +307,64 @@ class PermissionRequestApiIntegrationTests(unittest.TestCase):
         self.assertEqual(payload["data"]["policy_version"], "perm-map.v1")
         self.assertIn("structured_request", payload["data"])
 
+    def test_post_permission_request_evaluate_submits_approval_when_required(self) -> None:
+        _, create_payload = self._request(
+            "POST",
+            "/permission-requests",
+            headers=self._headers("req_trace_215"),
+            json_body={
+                "message": "我需要查看薪资报表",
+                "agent_id": "agent_perm_assistant_v1",
+                "delegation_id": "dlg_123",
+            },
+        )
+        permission_request_id = create_payload["data"]["permission_request_id"]
+
+        status_code, payload = self._request(
+            "POST",
+            f"/permission-requests/{permission_request_id}/evaluate",
+            headers=self._system_headers("req_trace_216"),
+            json_body={"force_re_evaluate": False},
+        )
+
+        self.assertEqual(status_code, 200)
+        self.assertEqual(payload["data"]["approval_status"], "Pending")
+        self.assertEqual(payload["data"]["approval_route"], ["manager", "security_admin"])
+
+        with self.session_factory() as session:
+            approval_record = session.scalar(
+                select(ApprovalRecordRecord)
+                .where(ApprovalRecordRecord.request_id == permission_request_id)
+                .order_by(ApprovalRecordRecord.created_at.desc())
+            )
+            self.assertIsNotNone(approval_record)
+            assert approval_record is not None
+            self.assertEqual(approval_record.approval_status, "Pending")
+            self.assertTrue(approval_record.external_approval_id.startswith("feishu_apr_"))
+            self.assertEqual(approval_record.approval_node, "manager")
+            self.assertIsNotNone(approval_record.submitted_at)
+
+            permission_request = session.get(PermissionRequestRecord, permission_request_id)
+            self.assertIsNotNone(permission_request)
+            assert permission_request is not None
+            self.assertEqual(permission_request.request_status, "PendingApproval")
+            self.assertEqual(permission_request.approval_status, "Pending")
+            self.assertEqual(permission_request.grant_status, "NotCreated")
+
+            approval_event = session.scalar(
+                select(PermissionRequestEventRecord)
+                .where(PermissionRequestEventRecord.request_id == permission_request_id)
+                .where(PermissionRequestEventRecord.event_type == "approval.required")
+            )
+            self.assertIsNotNone(approval_event)
+
+            approval_audit = session.scalar(
+                select(AuditRecordRecord)
+                .where(AuditRecordRecord.request_id == permission_request_id)
+                .where(AuditRecordRecord.event_type == "approval.required")
+            )
+            self.assertIsNotNone(approval_audit)
+
     def test_post_permission_request_evaluate_rejects_repeated_evaluation(self) -> None:
         _, create_payload = self._request(
             "POST",
@@ -519,6 +578,7 @@ class PermissionRequestApiIntegrationTests(unittest.TestCase):
             for model in (
                 AuditRecordRecord,
                 PermissionRequestEventRecord,
+                ApprovalRecordRecord,
                 PermissionRequestRecord,
                 DelegationCredentialRecord,
                 AgentIdentityRecord,

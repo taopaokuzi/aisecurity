@@ -1,6 +1,14 @@
 from __future__ import annotations
 
 from .delegations import DelegationCreateInput, DelegationService
+from .approvals import (
+    ApprovalCallbackInput,
+    ApprovalCallbackPayload,
+    ApprovalCallbackResult,
+    ApprovalService,
+    ApprovalSubmissionResult,
+    ApprovalSubmitInput,
+)
 from .permission_requests import (
     PermissionRequestCreateInput,
     PermissionRequestListInput,
@@ -14,6 +22,12 @@ from .permission_request_evaluations import (
 )
 
 __all__ = [
+    "ApprovalCallbackInput",
+    "ApprovalCallbackPayload",
+    "ApprovalCallbackResult",
+    "ApprovalService",
+    "ApprovalSubmissionResult",
+    "ApprovalSubmitInput",
     "DelegationCreateInput",
     "DelegationService",
     "PermissionRequestCreateInput",

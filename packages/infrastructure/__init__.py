@@ -1,5 +1,19 @@
 from __future__ import annotations
 
+from .approval_adapter import (
+    ApprovalAdapter,
+    ApprovalAdapterSettings,
+    ApprovalCallbackSecuritySettings,
+    ApprovalCallbackVerifier,
+    ApprovalSubmissionCommand,
+    ApprovalSubmissionResponse,
+    StubApprovalAdapter,
+    build_callback_signature,
+    create_approval_adapter,
+    create_approval_callback_verifier,
+    load_approval_adapter_settings,
+    load_approval_callback_security_settings,
+)
 from .llm_gateway import (
     DEFAULT_LLM_MODEL,
     DEFAULT_LLM_PROVIDER,
@@ -26,6 +40,12 @@ from .permission_request_parser import (
 )
 
 __all__ = [
+    "ApprovalAdapter",
+    "ApprovalAdapterSettings",
+    "ApprovalCallbackSecuritySettings",
+    "ApprovalCallbackVerifier",
+    "ApprovalSubmissionCommand",
+    "ApprovalSubmissionResponse",
     "DEFAULT_LLM_MODEL",
     "DEFAULT_LLM_PROVIDER",
     "DEFAULT_LLM_TIMEOUT_SECONDS",
@@ -43,8 +63,14 @@ __all__ = [
     "OpenAICompatibleTransport",
     "PermissionRequestParseResult",
     "PermissionRequestParser",
+    "StubApprovalAdapter",
+    "build_callback_signature",
+    "create_approval_adapter",
+    "create_approval_callback_verifier",
     "create_default_transport",
     "create_llm_gateway",
+    "load_approval_adapter_settings",
+    "load_approval_callback_security_settings",
     "load_llm_gateway_settings",
 ]
 
