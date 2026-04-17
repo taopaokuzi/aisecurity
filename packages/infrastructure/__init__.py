@@ -20,6 +20,10 @@ from .llm_gateway import (
     create_llm_gateway,
     load_llm_gateway_settings,
 )
+from .permission_request_parser import (
+    PermissionRequestParseResult,
+    PermissionRequestParser,
+)
 
 __all__ = [
     "DEFAULT_LLM_MODEL",
@@ -37,6 +41,8 @@ __all__ = [
     "LLMTransport",
     "LLMTransportError",
     "OpenAICompatibleTransport",
+    "PermissionRequestParseResult",
+    "PermissionRequestParser",
     "create_default_transport",
     "create_llm_gateway",
     "load_llm_gateway_settings",

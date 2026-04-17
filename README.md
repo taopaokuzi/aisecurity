@@ -83,6 +83,17 @@ Task 9 完成了策略映射与风险规则引擎：
 - 增加覆盖只读优先、跨部门提风险、高敏资源升级审批和未知请求走安全路径的单元测试
 - 在任务总表中把 `TASK-009` 标记为 `DONE / PASS`
 
+## Task 10
+
+Task 10 完成了评估流程与 Evaluate API：
+
+- 在 `packages/application` 中新增申请评估服务，负责解析自然语言申请、执行策略评估、回写结构化结果和状态迁移
+- 在 `packages/infrastructure` 中新增申请解析器，统一封装 LLM/启发式解析结果
+- 在 `apps/api` 中新增 `POST /permission-requests/{id}/evaluate` 与 `GET /permission-requests/{id}/evaluation` 路由
+- 评估完成后会把结构化结果、最小权限建议、风险等级、审批链和 `policy_version` 落回申请记录，并写入评估事件与审计记录
+- 增加覆盖主案例、跨部门、高敏资源、模糊请求和重复评估拒绝的单元测试与集成测试
+- 在任务总表中把 `TASK-010` 标记为 `DONE / PASS`
+
 ## 环境准备
 
 1. 安装 Python 3.11、Node.js 20+、Docker、Docker Compose。

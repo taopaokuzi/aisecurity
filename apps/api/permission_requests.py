@@ -9,19 +9,25 @@ from sqlalchemy.orm import Session
 
 from packages.application import (
     PermissionRequestCreateInput,
+    PermissionRequestEvaluationInput,
+    PermissionRequestEvaluationResult,
+    PermissionRequestEvaluationService,
     PermissionRequestListInput,
     PermissionRequestListResult,
     PermissionRequestService,
 )
-from packages.domain import ApprovalStatus, PermissionRequest, RequestStatus
+from packages.domain import ApprovalStatus, DomainError, PermissionRequest, RequestStatus
 from packages.infrastructure import (
     AgentIdentityRepository,
     AuditRecordRepository,
     DelegationCredentialRepository,
+    PermissionRequestParser,
     PermissionRequestEventRepository,
     PermissionRequestRepository,
     UserRepository,
+    create_llm_gateway,
 )
+from packages.policy import create_policy_engine
 
 from .dependencies import ApiRequestContext, get_db_session, get_request_context
 
@@ -57,6 +63,7 @@ class PermissionRequestData(BaseModel):
     resource_key: str | None = None
     resource_type: str | None = None
     action: str | None = None
+    requested_duration: str | None = None
     suggested_permission: str | None = None
     risk_level: str | None = None
     approval_status: str
@@ -84,6 +91,34 @@ class PermissionRequestListResponse(BaseModel):
     data: PermissionRequestListData
 
 
+class EvaluatePermissionRequestRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    force_re_evaluate: bool = False
+
+
+class PermissionRequestEvaluationData(BaseModel):
+    request_id: str
+    resource_key: str | None = None
+    resource_type: str | None = None
+    action: str | None = None
+    requested_duration: str | None = None
+    structured_request: dict[str, object] | None = None
+    suggested_permission: str | None = None
+    risk_level: str | None = None
+    approval_route: list[str]
+    policy_version: str | None = None
+    approval_status: str
+    request_status: str
+    evaluated_at: datetime | None = None
+    failed_reason: str | None = None
+
+
+class PermissionRequestEvaluationResponse(BaseModel):
+    request_id: str
+    data: PermissionRequestEvaluationData
+
+
 def build_permission_request_service(session: Session) -> PermissionRequestService:
     return PermissionRequestService(
         user_repository=UserRepository(session),
@@ -92,6 +127,21 @@ def build_permission_request_service(session: Session) -> PermissionRequestServi
         permission_request_repository=PermissionRequestRepository(session),
         permission_request_event_repository=PermissionRequestEventRepository(session),
         audit_repository=AuditRecordRepository(session),
+    )
+
+
+def build_permission_request_evaluation_service(
+    session: Session,
+) -> PermissionRequestEvaluationService:
+    llm_gateway = create_llm_gateway()
+    parser = PermissionRequestParser(llm_gateway=llm_gateway)
+    return PermissionRequestEvaluationService(
+        user_repository=UserRepository(session),
+        permission_request_repository=PermissionRequestRepository(session),
+        permission_request_event_repository=PermissionRequestEventRepository(session),
+        audit_repository=AuditRecordRepository(session),
+        parser=parser,
+        policy_engine=create_policy_engine(),
     )
 
 
@@ -108,6 +158,7 @@ def build_permission_request_data(
         resource_key=permission_request.resource_key,
         resource_type=permission_request.resource_type,
         action=permission_request.action,
+        requested_duration=permission_request.requested_duration,
         suggested_permission=permission_request.suggested_permission,
         risk_level=risk_level,
         approval_status=permission_request.approval_status.value,
@@ -142,6 +193,36 @@ def build_detail_response(
     return PermissionRequestDetailResponse(
         request_id=request_id,
         data=build_permission_request_data(permission_request),
+    )
+
+
+def build_evaluation_response(
+    *,
+    request_id: str,
+    evaluation: PermissionRequestEvaluationResult,
+) -> PermissionRequestEvaluationResponse:
+    return PermissionRequestEvaluationResponse(
+        request_id=request_id,
+        data=PermissionRequestEvaluationData(
+            request_id=evaluation.request_id,
+            resource_key=evaluation.resource_key,
+            resource_type=evaluation.resource_type,
+            action=evaluation.action,
+            requested_duration=evaluation.requested_duration,
+            structured_request=(
+                dict(evaluation.structured_request)
+                if evaluation.structured_request is not None
+                else None
+            ),
+            suggested_permission=evaluation.suggested_permission,
+            risk_level=evaluation.risk_level.value if evaluation.risk_level else None,
+            approval_route=list(evaluation.approval_route),
+            policy_version=evaluation.policy_version,
+            approval_status=evaluation.approval_status.value,
+            request_status=evaluation.request_status.value,
+            evaluated_at=evaluation.evaluated_at,
+            failed_reason=evaluation.failed_reason,
+        ),
     )
 
 
@@ -203,6 +284,60 @@ def get_permission_request(
     return build_detail_response(
         request_id=context.request_id,
         permission_request=permission_request,
+    )
+
+
+@router.post(
+    "/permission-requests/{permission_request_id}/evaluate",
+    response_model=PermissionRequestEvaluationResponse,
+)
+def evaluate_permission_request(
+    permission_request_id: str,
+    payload: EvaluatePermissionRequestRequest,
+    context: Annotated[ApiRequestContext, Depends(get_request_context)],
+    session: Annotated[Session, Depends(get_db_session)],
+) -> PermissionRequestEvaluationResponse:
+    service = build_permission_request_evaluation_service(session)
+    try:
+        evaluation = service.evaluate_permission_request(
+            PermissionRequestEvaluationInput(
+                permission_request_id=permission_request_id,
+                request_id=context.request_id,
+                operator_user_id=context.user_id,
+                operator_type=context.operator_type,
+                trace_id=context.trace_id,
+                force_re_evaluate=payload.force_re_evaluate,
+            )
+        )
+        session.commit()
+    except DomainError:
+        session.commit()
+        raise
+
+    return build_evaluation_response(
+        request_id=context.request_id,
+        evaluation=evaluation,
+    )
+
+
+@router.get(
+    "/permission-requests/{permission_request_id}/evaluation",
+    response_model=PermissionRequestEvaluationResponse,
+)
+def get_permission_request_evaluation(
+    permission_request_id: str,
+    context: Annotated[ApiRequestContext, Depends(get_request_context)],
+    session: Annotated[Session, Depends(get_db_session)],
+) -> PermissionRequestEvaluationResponse:
+    service = build_permission_request_evaluation_service(session)
+    evaluation = service.get_permission_request_evaluation(
+        permission_request_id,
+        requester_user_id=context.user_id,
+        operator_type=context.operator_type,
+    )
+    return build_evaluation_response(
+        request_id=context.request_id,
+        evaluation=evaluation,
     )
 
 

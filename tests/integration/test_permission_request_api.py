@@ -213,6 +213,128 @@ class PermissionRequestApiIntegrationTests(unittest.TestCase):
         self.assertEqual(payload["data"]["approval_status"], "NotRequired")
         self.assertEqual(payload["data"]["grant_status"], "NotCreated")
 
+    def test_post_permission_request_evaluate_updates_structured_result(self) -> None:
+        _, create_payload = self._request(
+            "POST",
+            "/permission-requests",
+            headers=self._headers("req_trace_207"),
+            json_body={
+                "message": "我需要查看销售部 Q3 报表，但不需要修改权限",
+                "agent_id": "agent_perm_assistant_v1",
+                "delegation_id": "dlg_123",
+            },
+        )
+        permission_request_id = create_payload["data"]["permission_request_id"]
+
+        status_code, payload = self._request(
+            "POST",
+            f"/permission-requests/{permission_request_id}/evaluate",
+            headers=self._system_headers("req_trace_208"),
+            json_body={"force_re_evaluate": False},
+        )
+
+        self.assertEqual(status_code, 200)
+        self.assertEqual(payload["data"]["request_id"], permission_request_id)
+        self.assertEqual(payload["data"]["resource_key"], "sales.q3_report")
+        self.assertEqual(payload["data"]["resource_type"], "report")
+        self.assertEqual(payload["data"]["action"], "read")
+        self.assertEqual(payload["data"]["requested_duration"], "P7D")
+        self.assertEqual(payload["data"]["suggested_permission"], "report:sales.q3:read")
+        self.assertEqual(payload["data"]["risk_level"], "Low")
+        self.assertEqual(payload["data"]["approval_route"], [])
+        self.assertEqual(payload["data"]["policy_version"], "perm-map.v1")
+        self.assertEqual(payload["data"]["request_status"], "PendingApproval")
+
+        with self.session_factory() as session:
+            permission_request = session.get(PermissionRequestRecord, permission_request_id)
+            self.assertIsNotNone(permission_request)
+            assert permission_request is not None
+            self.assertEqual(permission_request.resource_key, "sales.q3_report")
+            self.assertEqual(permission_request.resource_type, "report")
+            self.assertEqual(permission_request.action, "read")
+            self.assertEqual(permission_request.requested_duration, "P7D")
+            self.assertEqual(permission_request.suggested_permission, "report:sales.q3:read")
+            self.assertEqual(permission_request.risk_level, "Low")
+            self.assertEqual(permission_request.policy_version, "perm-map.v1")
+            self.assertEqual(permission_request.request_status, "PendingApproval")
+            self.assertEqual(permission_request.approval_status, "NotRequired")
+            self.assertEqual(permission_request.current_task_state, "Succeeded")
+            self.assertIsNotNone(permission_request.structured_request_json)
+            assert permission_request.structured_request_json is not None
+            self.assertEqual(permission_request.structured_request_json["approval_route"], [])
+
+            events = session.scalars(
+                select(PermissionRequestEventRecord)
+                .where(PermissionRequestEventRecord.request_id == permission_request_id)
+                .order_by(PermissionRequestEventRecord.occurred_at.asc())
+            ).all()
+            self.assertEqual(
+                [event.event_type for event in events],
+                ["request.submitted", "request.evaluation_started", "request.evaluated"],
+            )
+
+    def test_get_permission_request_evaluation_returns_structured_result(self) -> None:
+        _, create_payload = self._request(
+            "POST",
+            "/permission-requests",
+            headers=self._headers("req_trace_209"),
+            json_body={
+                "message": "我需要查看薪资报表",
+                "agent_id": "agent_perm_assistant_v1",
+                "delegation_id": "dlg_123",
+            },
+        )
+        permission_request_id = create_payload["data"]["permission_request_id"]
+        self._request(
+            "POST",
+            f"/permission-requests/{permission_request_id}/evaluate",
+            headers=self._system_headers("req_trace_210"),
+            json_body={"force_re_evaluate": False},
+        )
+
+        status_code, payload = self._request(
+            "GET",
+            f"/permission-requests/{permission_request_id}/evaluation",
+            headers=self._headers("req_trace_211"),
+        )
+
+        self.assertEqual(status_code, 200)
+        self.assertEqual(payload["data"]["request_id"], permission_request_id)
+        self.assertEqual(payload["data"]["resource_key"], "finance.payroll")
+        self.assertEqual(payload["data"]["risk_level"], "High")
+        self.assertEqual(payload["data"]["approval_route"], ["manager", "security_admin"])
+        self.assertEqual(payload["data"]["policy_version"], "perm-map.v1")
+        self.assertIn("structured_request", payload["data"])
+
+    def test_post_permission_request_evaluate_rejects_repeated_evaluation(self) -> None:
+        _, create_payload = self._request(
+            "POST",
+            "/permission-requests",
+            headers=self._headers("req_trace_212"),
+            json_body={
+                "message": "我需要查看销售部 Q3 报表",
+                "agent_id": "agent_perm_assistant_v1",
+                "delegation_id": "dlg_123",
+            },
+        )
+        permission_request_id = create_payload["data"]["permission_request_id"]
+        self._request(
+            "POST",
+            f"/permission-requests/{permission_request_id}/evaluate",
+            headers=self._system_headers("req_trace_213"),
+            json_body={"force_re_evaluate": False},
+        )
+
+        status_code, payload = self._request(
+            "POST",
+            f"/permission-requests/{permission_request_id}/evaluate",
+            headers=self._system_headers("req_trace_214"),
+            json_body={"force_re_evaluate": False},
+        )
+
+        self.assertEqual(status_code, 409)
+        self.assertEqual(payload["error"]["code"], "REQUEST_STATUS_INVALID")
+
     def test_get_permission_requests_supports_pagination_and_filters(self) -> None:
         now = datetime(2026, 4, 17, 9, 0, tzinfo=timezone.utc)
         with self.session_factory.begin() as session:
@@ -413,8 +535,8 @@ class PermissionRequestApiIntegrationTests(unittest.TestCase):
                     employee_no="E001",
                     display_name="Alice",
                     email="alice@example.com",
-                    department_id="dept_001",
-                    department_name="Security",
+                    department_id="dept_sales",
+                    department_name="sales",
                     manager_user_id=None,
                     user_status="Active",
                     identity_source="SSO",
@@ -462,6 +584,13 @@ class PermissionRequestApiIntegrationTests(unittest.TestCase):
         return {
             "X-Request-Id": request_id,
             "X-User-Id": "user_001",
+        }
+
+    def _system_headers(self, request_id: str) -> dict[str, str]:
+        return {
+            "X-Request-Id": request_id,
+            "X-User-Id": "system_worker",
+            "X-Operator-Type": "System",
         }
 
     def _request(

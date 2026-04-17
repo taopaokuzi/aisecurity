@@ -7,11 +7,19 @@ from .permission_requests import (
     PermissionRequestListResult,
     PermissionRequestService,
 )
+from .permission_request_evaluations import (
+    PermissionRequestEvaluationInput,
+    PermissionRequestEvaluationResult,
+    PermissionRequestEvaluationService,
+)
 
 __all__ = [
     "DelegationCreateInput",
     "DelegationService",
     "PermissionRequestCreateInput",
+    "PermissionRequestEvaluationInput",
+    "PermissionRequestEvaluationResult",
+    "PermissionRequestEvaluationService",
     "PermissionRequestListInput",
     "PermissionRequestListResult",
     "PermissionRequestService",
