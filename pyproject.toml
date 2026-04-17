@@ -14,6 +14,11 @@ dependencies = [
   "uvicorn>=0.34,<1",
 ]
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["apps*", "config*"]
+exclude = ["docker*", "migrations*", "tests*"]
+
 [tool.pytest.ini_options]
 testpaths = [
   "tests/unit",

@@ -1,0 +1,22 @@
+[app]
+env = "test"
+log_level = "DEBUG"
+
+[database]
+host = "127.0.0.1"
+port = 5432
+name = "aisecurity_test"
+user = "aisecurity"
+password = "aisecurity"
+
+[redis]
+host = "127.0.0.1"
+port = 6379
+db = 2
+
+[celery]
+broker_db = 2
+result_db = 3
+
+[web]
+next_public_api_base_url = "http://127.0.0.1:8000"

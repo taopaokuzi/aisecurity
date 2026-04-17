@@ -1,0 +1,42 @@
+[app]
+env = "prod"
+external_mode = "live"
+log_level = "INFO"
+
+[database]
+host = "db.internal"
+port = 5432
+name = "aisecurity"
+user = "aisecurity"
+password = "change-me"
+
+[redis]
+host = "redis.internal"
+port = 6379
+db = 0
+
+[celery]
+broker_db = 0
+result_db = 1
+
+[web]
+next_public_api_base_url = "https://app.example.com/api"
+
+[integrations.sso]
+mode = "sso"
+base_url = "https://sso.example.com"
+client_id = "replace-with-real-id"
+client_secret = "replace-with-real-secret"
+
+[integrations.feishu]
+mode = "feishu"
+app_id = "replace-with-real-app-id"
+app_secret = "replace-with-real-app-secret"
+approval_base_url = "https://open.feishu.cn/open-apis/approval"
+permission_base_url = "https://open.feishu.cn/open-apis/permission"
+callback_signing_secret = "replace-with-real-callback-secret"
+mock_base_url = ""
+
+[security]
+signing_secret = "replace-with-real-signing-secret"
+audit_hash_secret = "replace-with-real-audit-hash-secret"

@@ -1,0 +1,171 @@
+name: aisecurity
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-aisecurity}
+      POSTGRES_USER: ${POSTGRES_USER:-aisecurity}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aisecurity}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-aisecurity} -d ${POSTGRES_DB:-aisecurity}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/python.Dockerfile
+      args:
+        APP_UID: ${APP_UID:-1000}
+        APP_GID: ${APP_GID:-1000}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      PYTHONUNBUFFERED: "1"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+    entrypoint: ["python", "-m", "config.loader", "exec", "--"]
+    command: ["python", "-m", "apps.api"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${API_PORT:-8000}:${API_PORT:-8000}"
+    volumes:
+      - .:/app
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-m",
+          "config.loader",
+          "exec",
+          "--",
+          "python",
+          "-c",
+          "import sys,urllib.request;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:' + __import__('os').environ.get('API_PORT', '8000') + '/health').status == 200 else 1)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/python.Dockerfile
+      args:
+        APP_UID: ${APP_UID:-1000}
+        APP_GID: ${APP_GID:-1000}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      PYTHONUNBUFFERED: "1"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+    entrypoint: ["python", "-m", "config.loader", "exec", "--"]
+    command: ["python", "-m", "apps.worker"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-m",
+          "config.loader",
+          "exec",
+          "--",
+          "python",
+          "-m",
+          "apps.worker.healthcheck",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      NODE_ENV: ${NODE_ENV:-development}
+    entrypoint: ["python3", "-m", "config.loader", "exec", "--"]
+    command: ["npm", "--prefix", "apps/web", "run", "dev"]
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    volumes:
+      - .:/app
+      - web-node-modules:/app/node_modules
+      - web-next-cache:/app/apps/web/.next
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-m",
+          "config.loader",
+          "exec",
+          "--",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  postgres-data:
+  redis-data:
+  web-node-modules:
+  web-next-cache:

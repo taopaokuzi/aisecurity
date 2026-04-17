@@ -1,0 +1,58 @@
+[app]
+name = "aisecurity"
+version = "0.1.0"
+env = "dev"
+log_level = "INFO"
+external_mode = "mock"
+
+[api]
+service_name = "aisecurity-api"
+host = "0.0.0.0"
+port = 8000
+
+[worker]
+service_name = "aisecurity-worker"
+log_level = "INFO"
+queue_name = "aisecurity.default"
+
+[web]
+service_name = "aisecurity-web"
+port = 3000
+next_public_api_base_url = "http://127.0.0.1:8000"
+
+[database]
+scheme = "postgresql+psycopg"
+host = "127.0.0.1"
+port = 5432
+name = "aisecurity"
+user = "aisecurity"
+password = "aisecurity"
+
+[redis]
+scheme = "redis"
+host = "127.0.0.1"
+port = 6379
+db = 0
+
+[celery]
+broker_db = 0
+result_db = 1
+
+[integrations.sso]
+mode = "stub"
+base_url = "http://stub-sso:8080"
+client_id = "stub-client-id"
+client_secret = "stub-client-secret"
+
+[integrations.feishu]
+mode = "mock"
+app_id = "mock-app-id"
+app_secret = "mock-app-secret"
+approval_base_url = "http://mock-feishu:8080/approval"
+permission_base_url = "http://mock-feishu:8080/permission"
+callback_signing_secret = "mock-callback-secret"
+mock_base_url = "http://mock-feishu:8080"
+
+[security]
+signing_secret = "dev-signing-secret"
+audit_hash_secret = "dev-audit-hash-secret"
