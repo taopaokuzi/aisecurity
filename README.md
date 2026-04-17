@@ -35,6 +35,15 @@ Task 4 完成了共享领域层的第一版沉淀：
 - 增加针对枚举、错误对象和模型约束的单元测试
 - 在任务总表中把 `TASK-004` 标记为 `DONE / PASS`
 
+## Task 5
+
+Task 5 完成了数据库基础结构和仓储骨架：
+
+- 在 `packages/infrastructure/db` 中新增首批核心表的 SQLAlchemy 模型和 session 封装
+- 在 `packages/infrastructure/repositories` 中新增用户、委托、申请单、审批、授权、审计等仓储骨架
+- 增加 `20260417_0002` Alembic 迁移，并把 `migrations/env.py` 接到 `Base.metadata`
+- 在任务总表中把 `TASK-005` 标记为 `DONE / PASS`
+
 ## 环境准备
 
 1. 安装 Python 3.11、Node.js 20+、Docker、Docker Compose。
