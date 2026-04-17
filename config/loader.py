@@ -57,6 +57,12 @@ ENV_TO_PATH = {
         "callback_signing_secret",
     ),
     "MOCK_FEISHU_BASE_URL": ("integrations", "feishu", "mock_base_url"),
+    "LLM_PROVIDER": ("llm", "provider"),
+    "LLM_BASE_URL": ("llm", "base_url"),
+    "LLM_API_KEY": ("llm", "api_key"),
+    "LLM_MODEL": ("llm", "model"),
+    "LLM_TIMEOUT_SECONDS": ("llm", "timeout_seconds"),
+    "LLM_PROMPT_DIR": ("llm", "prompt_dir"),
     "SIGNING_SECRET": ("security", "signing_secret"),
     "AUDIT_HASH_SECRET": ("security", "audit_hash_secret"),
 }
@@ -177,6 +183,7 @@ def load_runtime_env(env_name: str | None = None) -> dict[str, str]:
     database = settings.setdefault("database", {})
     redis = settings.setdefault("redis", {})
     celery = settings.setdefault("celery", {})
+    llm = settings.setdefault("llm", {})
     sso = get_nested(settings, ("integrations", "sso"), {}) or {}
     feishu = get_nested(settings, ("integrations", "feishu"), {}) or {}
     security = settings.setdefault("security", {})
@@ -263,6 +270,12 @@ def load_runtime_env(env_name: str | None = None) -> dict[str, str]:
             feishu.get("callback_signing_secret", "mock-callback-secret")
         ),
         "MOCK_FEISHU_BASE_URL": stringify(feishu.get("mock_base_url", "http://mock-feishu:8080")),
+        "LLM_PROVIDER": stringify(llm.get("provider", "stub")),
+        "LLM_BASE_URL": stringify(llm.get("base_url", "https://api.openai.com/v1")),
+        "LLM_API_KEY": stringify(llm.get("api_key", "")),
+        "LLM_MODEL": stringify(llm.get("model", "gpt-4.1-mini")),
+        "LLM_TIMEOUT_SECONDS": stringify(llm.get("timeout_seconds", 30)),
+        "LLM_PROMPT_DIR": stringify(llm.get("prompt_dir", "packages/prompts/templates")),
         "SIGNING_SECRET": stringify(security.get("signing_secret", "dev-signing-secret")),
         "AUDIT_HASH_SECRET": stringify(security.get("audit_hash_secret", "dev-audit-hash-secret")),
     }

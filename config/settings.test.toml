@@ -18,5 +18,10 @@ db = 2
 broker_db = 2
 result_db = 3
 
+[llm]
+provider = "stub"
+model = "gpt-4.1-mini"
+timeout_seconds = 5
+
 [web]
 next_public_api_base_url = "http://127.0.0.1:8000"

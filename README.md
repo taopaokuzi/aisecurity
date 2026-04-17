@@ -63,6 +63,16 @@ Task 7 完成了申请单创建与查询 API：
 - 增加覆盖正常创建申请、无效委托拒绝、空消息拒绝、详情查询和分页列表的单元测试与集成测试
 - 在任务总表中把 `TASK-007` 标记为 `DONE / PASS`
 
+## Task 8
+
+Task 8 完成了 LLM Gateway 与 Prompt 装载基础设施：
+
+- 在 `packages/infrastructure` 中新增统一的 LLM Gateway、传输抽象、OpenAI-compatible transport 和配置加载入口
+- 在 `packages/prompts` 中新增 Prompt 模板读取、变量渲染和缺失模板/变量的错误边界
+- 在 `config/` 中新增 LLM provider、模型、超时、Prompt 目录等基础配置
+- 增加覆盖 Prompt 加载、变量渲染、Gateway 配置读取、超时包装和异常包装的单元测试
+- 在任务总表中把 `TASK-008` 标记为 `DONE / PASS`
+
 ## 环境准备
 
 1. 安装 Python 3.11、Node.js 20+、Docker、Docker Compose。

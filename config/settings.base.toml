@@ -38,6 +38,14 @@ db = 0
 broker_db = 0
 result_db = 1
 
+[llm]
+provider = "stub"
+base_url = "https://api.openai.com/v1"
+api_key = ""
+model = "gpt-4.1-mini"
+timeout_seconds = 30
+prompt_dir = "packages/prompts/templates"
+
 [integrations.sso]
 mode = "stub"
 base_url = "http://stub-sso:8080"
