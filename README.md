@@ -73,6 +73,16 @@ Task 8 完成了 LLM Gateway 与 Prompt 装载基础设施：
 - 增加覆盖 Prompt 加载、变量渲染、Gateway 配置读取、超时包装和异常包装的单元测试
 - 在任务总表中把 `TASK-008` 标记为 `DONE / PASS`
 
+## Task 9
+
+Task 9 完成了策略映射与风险规则引擎：
+
+- 在 `config/policy` 中新增权限映射、风险规则、审批路由和版本清单配置
+- 在 `packages/policy` 中新增策略加载器、规则模型和评估引擎，输出权限建议、风险等级、审批链和 `policy_version`
+- 规则优先于 LLM 最终授权结论，无法明确判定时默认切换到更安全的人工复核路径
+- 增加覆盖只读优先、跨部门提风险、高敏资源升级审批和未知请求走安全路径的单元测试
+- 在任务总表中把 `TASK-009` 标记为 `DONE / PASS`
+
 ## 环境准备
 
 1. 安装 Python 3.11、Node.js 20+、Docker、Docker Compose。

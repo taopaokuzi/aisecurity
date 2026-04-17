@@ -1,0 +1,59 @@
+[action_terms]
+read = [
+  "read",
+  "view",
+  "查看",
+  "查阅",
+  "浏览",
+  "只读",
+  "只看",
+  "看一下",
+]
+write = [
+  "write",
+  "edit",
+  "修改",
+  "编辑",
+  "变更",
+  "更新",
+]
+request_edit = [
+  "request_edit",
+  "申请修改",
+  "申请编辑",
+]
+readonly_priority_terms = [
+  "只看不改",
+  "只读",
+  "不修改",
+  "无需修改",
+  "只查看",
+  "仅查看",
+]
+
+[[resources]]
+name = "sales_q3_report"
+resource_key = "sales.q3_report"
+resource_type = "report"
+department = "sales"
+sensitivity = "internal"
+resource_terms = ["销售部", "q3", "报表"]
+permission_map = { read = "report:sales.q3:read", write = "report:sales.q3:write" }
+
+[[resources]]
+name = "finance_payroll_report"
+resource_key = "finance.payroll"
+resource_type = "report"
+department = "finance"
+sensitivity = "high"
+resource_terms = ["薪资", "工资", "薪酬", "payroll", "报表"]
+permission_map = { read = "report:finance.payroll:read", write = "report:finance.payroll:write" }
+
+[[resources]]
+name = "shared_team_doc"
+resource_key = "shared.team_doc"
+resource_type = "doc"
+department = "shared"
+sensitivity = "low"
+resource_terms = ["共享文档", "团队文档", "文档"]
+permission_map = { read = "doc:shared.team_doc:read", write = "doc:shared.team_doc:write" }

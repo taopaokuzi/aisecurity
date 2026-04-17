@@ -1,0 +1,8 @@
+[policy]
+policy_id = "agent_identity_permission_v1"
+version = "perm-map.v1"
+
+[files]
+permission_mappings = "permission_mappings.toml"
+risk_rules = "risk_rules.toml"
+approval_rules = "approval_rules.toml"

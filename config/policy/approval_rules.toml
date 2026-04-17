@@ -1,0 +1,42 @@
+[[routes]]
+name = "manual_review_fallback"
+fallback_only = true
+approval_required = true
+route = ["manager", "security_admin"]
+requires_manager_approval = true
+requires_escalated_approval = true
+recommended_path = "manual_review"
+reason = "无法明确判定时进入人工复核与升级审批。"
+
+[[routes]]
+name = "low_risk_same_department_read"
+risk_levels = ["Low"]
+actions = ["read"]
+cross_department = false
+sensitivities = ["low", "internal"]
+approval_required = false
+route = []
+requires_manager_approval = false
+requires_escalated_approval = false
+recommended_path = "direct_process"
+reason = "普通同部门只读请求可直接进入后续流程。"
+
+[[routes]]
+name = "manager_review"
+risk_levels = ["Medium"]
+approval_required = true
+route = ["manager"]
+requires_manager_approval = true
+requires_escalated_approval = false
+recommended_path = "manager_approval"
+reason = "中风险请求需要主管审批。"
+
+[[routes]]
+name = "security_escalation"
+risk_levels = ["High", "Critical"]
+approval_required = true
+route = ["manager", "security_admin"]
+requires_manager_approval = true
+requires_escalated_approval = true
+recommended_path = "escalated_approval"
+reason = "高风险请求需要主管审批并升级安全审批。"

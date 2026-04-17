@@ -1,0 +1,31 @@
+[base_scores]
+read = 10
+write = 40
+request_edit = 35
+unknown = 60
+
+[level_thresholds]
+medium = 30
+high = 60
+critical = 85
+
+[[rules]]
+name = "cross_department_access"
+score_delta = 25
+minimum_level = "Medium"
+reason = "跨部门访问需要提升风险并建议主管审批。"
+cross_department = true
+
+[[rules]]
+name = "high_sensitive_resource"
+score_delta = 30
+minimum_level = "High"
+reason = "高敏资源访问需要升级审批。"
+sensitivities = ["high", "restricted"]
+
+[[rules]]
+name = "unresolved_request"
+score_delta = 20
+minimum_level = "High"
+reason = "资源或动作无法明确判定时默认走更安全路径。"
+fallback_only = true
