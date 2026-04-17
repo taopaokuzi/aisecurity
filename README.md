@@ -44,6 +44,15 @@ Task 5 完成了数据库基础结构和仓储骨架：
 - 增加 `20260417_0002` Alembic 迁移，并把 `migrations/env.py` 接到 `Base.metadata`
 - 在任务总表中把 `TASK-005` 标记为 `DONE / PASS`
 
+## Task 6
+
+Task 6 完成了委托凭证用例与 API：
+
+- 在 `packages/application` 中新增委托创建、查询和有效性校验服务
+- 在 `apps/api` 中新增 `POST /delegations` 与 `GET /delegations/{id}` 路由、请求上下文依赖和统一错误处理
+- 增加覆盖委托创建、禁用 Agent 拒绝、非法过期时间拒绝、查询已存在委托和幂等回放的单元测试与集成测试
+- 在任务总表中把 `TASK-006` 标记为 `DONE / PASS`
+
 ## 环境准备
 
 1. 安装 Python 3.11、Node.js 20+、Docker、Docker Compose。

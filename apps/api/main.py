@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 
 from fastapi import FastAPI
 
+from .delegations import router as delegations_router
+from .errors import register_exception_handlers
 from .settings import get_api_settings
 
 
@@ -55,6 +57,9 @@ def create_app() -> FastAPI:
     async def health() -> dict[str, str]:
         started_at = getattr(app.state, "started_at", None)
         return build_health_payload(started_at=started_at)
+
+    register_exception_handlers(app)
+    app.include_router(delegations_router)
 
     return app
 
