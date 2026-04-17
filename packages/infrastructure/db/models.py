@@ -308,6 +308,48 @@ class AccessGrantRecord(TimestampMixin, Base):
     revocation_reason: Mapped[str | None] = mapped_column(String(256), nullable=True)
 
 
+class ConnectorTaskRecord(TimestampMixin, Base):
+    __tablename__ = "connector_tasks"
+    __table_args__ = (
+        Index("idx_connector_tasks_grant_id_status", "grant_id", "task_status"),
+        Index("idx_connector_tasks_scheduled_at", "task_status", "scheduled_at"),
+        enum_check_constraint("task_status", TASK_STATUS_VALUES, "ck_connector_tasks_task_status"),
+        CheckConstraint("retry_count >= 0", name="ck_connector_tasks_retry_count"),
+        CheckConstraint("max_retry_count >= 0", name="ck_connector_tasks_max_retry_count"),
+    )
+
+    task_id: Mapped[str] = prefixed_id_column()
+    grant_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("access_grants.grant_id", name="fk_connector_tasks_grants"),
+        nullable=False,
+    )
+    request_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("permission_requests.request_id", name="fk_connector_tasks_requests"),
+        nullable=False,
+    )
+    task_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    task_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    retry_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )
+    max_retry_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=3,
+        server_default=text("3"),
+    )
+    last_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_error_message: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    payload_json: Mapped[JSONObject | None] = mapped_column(JSONB, nullable=True)
+    scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class AuditRecordRecord(Base):
     __tablename__ = "audit_records"
     __table_args__ = (

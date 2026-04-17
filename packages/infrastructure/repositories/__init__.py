@@ -6,6 +6,7 @@ from .permissions import (
     AccessGrantRepository,
     ApprovalRecordRepository,
     AuditRecordRepository,
+    ConnectorTaskRepository,
     PermissionRequestEventRepository,
     PermissionRequestRepository,
 )
@@ -15,6 +16,7 @@ __all__ = [
     "AgentIdentityRepository",
     "ApprovalRecordRepository",
     "AuditRecordRepository",
+    "ConnectorTaskRepository",
     "DelegationCredentialRepository",
     "PermissionRequestEventRepository",
     "PermissionRequestRepository",

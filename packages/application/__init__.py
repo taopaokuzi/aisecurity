@@ -20,6 +20,12 @@ from .permission_request_evaluations import (
     PermissionRequestEvaluationResult,
     PermissionRequestEvaluationService,
 )
+from .provisioning import (
+    GrantProvisionInput,
+    GrantProvisionResult,
+    ProvisioningService,
+    default_grant_id_for_request,
+)
 
 __all__ = [
     "ApprovalCallbackInput",
@@ -37,4 +43,8 @@ __all__ = [
     "PermissionRequestListInput",
     "PermissionRequestListResult",
     "PermissionRequestService",
+    "GrantProvisionInput",
+    "GrantProvisionResult",
+    "ProvisioningService",
+    "default_grant_id_for_request",
 ]

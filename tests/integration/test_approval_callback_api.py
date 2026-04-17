@@ -17,12 +17,15 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from apps.api.dependencies import get_db_session
 from apps.api.main import create_app
+from packages.application import default_grant_id_for_request
 from packages.infrastructure import build_callback_signature
 from packages.infrastructure.db import Base
 from packages.infrastructure.db.models import (
+    AccessGrantRecord,
     AgentIdentityRecord,
     ApprovalRecordRecord,
     AuditRecordRecord,
+    ConnectorTaskRecord,
     DelegationCredentialRecord,
     PermissionRequestEventRecord,
     PermissionRequestRecord,
@@ -108,6 +111,8 @@ class ApprovalCallbackApiIntegrationTests(unittest.TestCase):
         cls.engine.dispose()
 
     def setUp(self) -> None:
+        os.environ["FEISHU_CONNECTOR_PROVIDER"] = "stub"
+        os.environ["FEISHU_CONNECTOR_STUB_MODE"] = "accepted"
         self._truncate_tables()
         self._seed_identity_data()
 
@@ -141,8 +146,8 @@ class ApprovalCallbackApiIntegrationTests(unittest.TestCase):
             self.assertIsNotNone(permission_request)
             assert permission_request is not None
             self.assertEqual(permission_request.approval_status, "Approved")
-            self.assertEqual(permission_request.request_status, "Approved")
-            self.assertEqual(permission_request.grant_status, "NotCreated")
+            self.assertEqual(permission_request.request_status, "Provisioning")
+            self.assertEqual(permission_request.grant_status, "Provisioning")
             self.assertEqual(permission_request.current_task_state, "Succeeded")
 
             approval_record = session.get(ApprovalRecordRecord, "apr_approved_001")
@@ -156,6 +161,20 @@ class ApprovalCallbackApiIntegrationTests(unittest.TestCase):
                 "Approved",
             )
 
+            grant_id = default_grant_id_for_request("req_approved_001")
+            access_grant = session.get(AccessGrantRecord, grant_id)
+            self.assertIsNotNone(access_grant)
+            assert access_grant is not None
+            self.assertEqual(access_grant.grant_status, "Provisioning")
+            self.assertEqual(access_grant.connector_status, "Accepted")
+
+            connector_tasks = session.scalars(
+                select(ConnectorTaskRecord)
+                .where(ConnectorTaskRecord.grant_id == grant_id)
+            ).all()
+            self.assertEqual(len(connector_tasks), 1)
+            self.assertEqual(connector_tasks[0].task_status, "Succeeded")
+
             events = session.scalars(
                 select(PermissionRequestEventRecord)
                 .where(PermissionRequestEventRecord.request_id == "req_approved_001")
@@ -163,7 +182,7 @@ class ApprovalCallbackApiIntegrationTests(unittest.TestCase):
             ).all()
             self.assertEqual(
                 [event.event_type for event in events],
-                ["approval.approved"],
+                ["approval.approved", "grant.provisioning_requested", "grant.accepted"],
             )
 
             audits = session.scalars(
@@ -173,7 +192,12 @@ class ApprovalCallbackApiIntegrationTests(unittest.TestCase):
             ).all()
             self.assertCountEqual(
                 [audit.event_type for audit in audits],
-                ["approval.callback_received", "approval.approved"],
+                [
+                    "approval.callback_received",
+                    "approval.approved",
+                    "grant.provisioning_requested",
+                    "grant.accepted",
+                ],
             )
 
     def test_approval_callback_marks_request_failed_on_rejection(self) -> None:
@@ -255,13 +279,20 @@ class ApprovalCallbackApiIntegrationTests(unittest.TestCase):
                 select(PermissionRequestEventRecord)
                 .where(PermissionRequestEventRecord.request_id == "req_duplicate_001")
             ).all()
-            self.assertEqual(len(events), 1)
+            self.assertEqual(len(events), 3)
 
             audits = session.scalars(
                 select(AuditRecordRecord)
                 .where(AuditRecordRecord.request_id == "req_duplicate_001")
             ).all()
-            self.assertEqual(len(audits), 2)
+            self.assertEqual(len(audits), 4)
+
+            grant_id = default_grant_id_for_request("req_duplicate_001")
+            connector_tasks = session.scalars(
+                select(ConnectorTaskRecord)
+                .where(ConnectorTaskRecord.grant_id == grant_id)
+            ).all()
+            self.assertEqual(len(connector_tasks), 1)
 
     def test_callback_rejects_invalid_signature(self) -> None:
         self._seed_pending_approval(
@@ -372,6 +403,8 @@ class ApprovalCallbackApiIntegrationTests(unittest.TestCase):
             for model in (
                 AuditRecordRecord,
                 PermissionRequestEventRecord,
+                ConnectorTaskRecord,
+                AccessGrantRecord,
                 ApprovalRecordRecord,
                 PermissionRequestRecord,
                 DelegationCredentialRecord,

@@ -11,8 +11,10 @@ from packages.application import (
     ApprovalCallbackPayload,
     ApprovalCallbackResult,
     ApprovalService,
+    GrantProvisionInput,
+    default_grant_id_for_request,
 )
-from packages.domain import DomainError, ErrorCode
+from packages.domain import ApprovalStatus, DomainError, ErrorCode, OperatorType
 from packages.infrastructure import (
     ApprovalRecordRepository,
     AuditRecordRepository,
@@ -23,6 +25,7 @@ from packages.infrastructure import (
 )
 
 from .dependencies import get_db_session
+from .grants import build_provisioning_service
 
 router = APIRouter(tags=["approvals"])
 
@@ -128,6 +131,27 @@ async def handle_approval_callback(
                 raw_body=raw_body,
             )
         )
+        if not result.duplicated and result.approval_status is ApprovalStatus.APPROVED:
+            request_record = PermissionRequestRepository(session).get(payload.request_id)
+            if request_record is not None:
+                provisioning_service = build_provisioning_service(session)
+                try:
+                    provisioning_service.provision_grant(
+                        GrantProvisionInput(
+                            grant_id=default_grant_id_for_request(payload.request_id),
+                            permission_request_id=payload.request_id,
+                            policy_version=request_record.policy_version or "",
+                            delegation_id=request_record.delegation_id,
+                            api_request_id=api_request_id,
+                            operator_user_id=payload.approver_id or "approval_callback",
+                            operator_type=OperatorType.SYSTEM,
+                            trace_id=request.headers.get("X-Trace-Id"),
+                        )
+                    )
+                except DomainError:
+                    # Approval callback has already been persisted; provisioning failure
+                    # is recorded by ProvisioningService and can be retried later.
+                    pass
         session.commit()
     except DomainError:
         session.commit()

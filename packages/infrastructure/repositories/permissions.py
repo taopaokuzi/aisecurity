@@ -8,6 +8,7 @@ from packages.infrastructure.db.models import (
     AccessGrantRecord,
     ApprovalRecordRecord,
     AuditRecordRecord,
+    ConnectorTaskRecord,
     PermissionRequestEventRecord,
     PermissionRequestRecord,
 )
@@ -123,6 +124,14 @@ class ApprovalRecordRepository(SqlAlchemyRepository[ApprovalRecordRecord]):
 class AccessGrantRepository(SqlAlchemyRepository[AccessGrantRecord]):
     model = AccessGrantRecord
 
+    def get_by_request_id(self, request_id: str) -> AccessGrantRecord | None:
+        statement = (
+            select(AccessGrantRecord)
+            .where(AccessGrantRecord.request_id == request_id)
+            .order_by(AccessGrantRecord.created_at.desc())
+        )
+        return self.session.scalar(statement)
+
     def list_for_request(self, request_id: str) -> list[AccessGrantRecord]:
         statement = (
             select(AccessGrantRecord)
@@ -136,6 +145,34 @@ class AccessGrantRepository(SqlAlchemyRepository[AccessGrantRecord]):
             select(AccessGrantRecord)
             .where(AccessGrantRecord.expire_at <= cutoff)
             .order_by(AccessGrantRecord.expire_at.asc())
+        )
+        return self.scalars(statement)
+
+
+class ConnectorTaskRepository(SqlAlchemyRepository[ConnectorTaskRecord]):
+    model = ConnectorTaskRecord
+
+    def list_for_grant(self, grant_id: str) -> list[ConnectorTaskRecord]:
+        statement = (
+            select(ConnectorTaskRecord)
+            .where(ConnectorTaskRecord.grant_id == grant_id)
+            .order_by(ConnectorTaskRecord.created_at.desc())
+        )
+        return self.scalars(statement)
+
+    def get_latest_for_grant(self, grant_id: str) -> ConnectorTaskRecord | None:
+        statement = (
+            select(ConnectorTaskRecord)
+            .where(ConnectorTaskRecord.grant_id == grant_id)
+            .order_by(ConnectorTaskRecord.created_at.desc())
+        )
+        return self.session.scalar(statement)
+
+    def list_for_request(self, request_id: str) -> list[ConnectorTaskRecord]:
+        statement = (
+            select(ConnectorTaskRecord)
+            .where(ConnectorTaskRecord.request_id == request_id)
+            .order_by(ConnectorTaskRecord.created_at.desc())
         )
         return self.scalars(statement)
 

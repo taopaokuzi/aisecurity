@@ -105,6 +105,18 @@ Task 11 完成了 Approval Adapter 与审批回调链路：
 - 增加覆盖审批自动提交、审批通过、审批驳回、重复回调、非法签名和审批记录缺失的单元测试与集成测试
 - 在任务总表中把 `TASK-011` 标记为 `DONE / PASS`
 
+## Task 12
+
+Task 12 完成了 Provisioning Service 与飞书连接器开通链路：
+
+- 在 `packages/application` 中新增授权开通服务，负责创建 `access_grants`、分派 `connector_tasks`、调用连接器并回写申请/授权状态
+- 在 `packages/infrastructure` 中新增 Feishu 权限连接器 stub、连接器请求/响应模型，以及 `connector_tasks` 的模型与仓储封装
+- 在 `apps/api` 中新增 `POST /grants/{id}/provision` 路由，并在审批回调通过后自动触发授权开通
+- 在 `apps/worker` 中新增 `worker.grants.provision` 任务，供后续异步重试和补偿流程复用
+- 开通结果现在能区分 `Accepted`、`Applied`、`Failed` 和连接器不可用场景，失败写回会先持久化再抛错，避免状态丢失
+- 增加覆盖开通成功、立即生效、连接器不可用失败写回、审批通过后自动开通和 worker 失败写回的单元测试与集成测试
+- 在任务总表中把 `TASK-012` 标记为 `DONE / PASS`
+
 ## 环境准备
 
 1. 安装 Python 3.11、Node.js 20+、Docker、Docker Compose。
