@@ -26,6 +26,15 @@ Task 3 完成了本地开发编排与配置加载基础设施：
 - 新增 `.env.example`、Docker 开发镜像定义和 Alembic 初始化链路
 - 补充 README 本地启动、迁移和健康检查说明，方便后续任务直接复用
 
+## Task 4
+
+Task 4 完成了共享领域层的第一版沉淀：
+
+- 在 `packages/domain` 中统一定义状态枚举、错误码和核心领域模型
+- 通过 `packages/domain/__init__.py` 暴露统一导出入口，供后续 API、Worker、Policy 复用
+- 增加针对枚举、错误对象和模型约束的单元测试
+- 在任务总表中把 `TASK-004` 标记为 `DONE / PASS`
+
 ## 环境准备
 
 1. 安装 Python 3.11、Node.js 20+、Docker、Docker Compose。
