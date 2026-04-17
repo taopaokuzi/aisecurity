@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import Select, func, select
 
 from packages.infrastructure.db.models import (
     AccessGrantRecord,
@@ -18,6 +18,35 @@ from .base import SqlAlchemyRepository
 class PermissionRequestRepository(SqlAlchemyRepository[PermissionRequestRecord]):
     model = PermissionRequestRecord
 
+    def list_paginated(
+        self,
+        *,
+        user_id: str | None = None,
+        request_status: str | None = None,
+        approval_status: str | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[PermissionRequestRecord], int]:
+        filters = []
+        if user_id is not None:
+            filters.append(PermissionRequestRecord.user_id == user_id)
+        if request_status is not None:
+            filters.append(PermissionRequestRecord.request_status == request_status)
+        if approval_status is not None:
+            filters.append(PermissionRequestRecord.approval_status == approval_status)
+
+        statement = self._apply_filters(select(PermissionRequestRecord), filters).order_by(
+            PermissionRequestRecord.created_at.desc()
+        )
+        statement = statement.offset((page - 1) * page_size).limit(page_size)
+
+        count_statement = self._apply_filters(
+            select(func.count()).select_from(PermissionRequestRecord),
+            filters,
+        )
+        total = self.session.scalar(count_statement) or 0
+        return self.scalars(statement), int(total)
+
     def list_for_user(self, user_id: str, *, limit: int | None = 100) -> list[PermissionRequestRecord]:
         statement = (
             select(PermissionRequestRecord)
@@ -27,6 +56,15 @@ class PermissionRequestRepository(SqlAlchemyRepository[PermissionRequestRecord])
         if limit is not None:
             statement = statement.limit(limit)
         return self.scalars(statement)
+
+    def _apply_filters(
+        self,
+        statement: Select,
+        filters: list[object],
+    ) -> Select:
+        if not filters:
+            return statement
+        return statement.where(*filters)
 
     def list_by_status(
         self,

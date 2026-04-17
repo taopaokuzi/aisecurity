@@ -53,6 +53,16 @@ Task 6 完成了委托凭证用例与 API：
 - 增加覆盖委托创建、禁用 Agent 拒绝、非法过期时间拒绝、查询已存在委托和幂等回放的单元测试与集成测试
 - 在任务总表中把 `TASK-006` 标记为 `DONE / PASS`
 
+## Task 7
+
+Task 7 完成了申请单创建与查询 API：
+
+- 在 `packages/application` 中新增自然语言申请创建、详情查询、分页列表和事件落库服务
+- 在 `apps/api` 中新增 `POST /permission-requests`、`GET /permission-requests/{id}`、`GET /permission-requests` 路由，并接入 API 入口
+- 在 `packages/infrastructure/repositories` 中补充申请单分页过滤查询能力，支撑列表接口按状态和用户筛选
+- 增加覆盖正常创建申请、无效委托拒绝、空消息拒绝、详情查询和分页列表的单元测试与集成测试
+- 在任务总表中把 `TASK-007` 标记为 `DONE / PASS`
+
 ## 环境准备
 
 1. 安装 Python 3.11、Node.js 20+、Docker、Docker Compose。

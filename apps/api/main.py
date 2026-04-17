@@ -7,6 +7,7 @@ from fastapi import FastAPI
 
 from .delegations import router as delegations_router
 from .errors import register_exception_handlers
+from .permission_requests import router as permission_requests_router
 from .settings import get_api_settings
 
 
@@ -60,6 +61,7 @@ def create_app() -> FastAPI:
 
     register_exception_handlers(app)
     app.include_router(delegations_router)
+    app.include_router(permission_requests_router)
 
     return app
 
