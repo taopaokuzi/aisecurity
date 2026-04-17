@@ -27,6 +27,7 @@ from packages.infrastructure.db.models import (
     AuditRecordRecord,
     ConnectorTaskRecord,
     DelegationCredentialRecord,
+    NotificationTaskRecord,
     PermissionRequestEventRecord,
     PermissionRequestRecord,
     UserRecord,
@@ -402,6 +403,7 @@ class ApprovalCallbackApiIntegrationTests(unittest.TestCase):
         with self.session_factory.begin() as session:
             for model in (
                 AuditRecordRecord,
+                NotificationTaskRecord,
                 PermissionRequestEventRecord,
                 ConnectorTaskRecord,
                 AccessGrantRecord,

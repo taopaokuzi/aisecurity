@@ -9,6 +9,7 @@ from packages.infrastructure.db.models import (
     ApprovalRecordRecord,
     AuditRecordRecord,
     ConnectorTaskRecord,
+    NotificationTaskRecord,
     PermissionRequestEventRecord,
     PermissionRequestRecord,
 )
@@ -148,6 +149,44 @@ class AccessGrantRepository(SqlAlchemyRepository[AccessGrantRecord]):
         )
         return self.scalars(statement)
 
+    def list_due_for_expiring(
+        self,
+        *,
+        current_time: datetime,
+        cutoff: datetime,
+    ) -> list[AccessGrantRecord]:
+        statement = (
+            select(AccessGrantRecord)
+            .where(AccessGrantRecord.expire_at > current_time)
+            .where(AccessGrantRecord.expire_at <= cutoff)
+            .where(
+                AccessGrantRecord.grant_status.in_(
+                    [
+                        "Active",
+                        "Expiring",
+                    ]
+                )
+            )
+            .order_by(AccessGrantRecord.expire_at.asc())
+        )
+        return self.scalars(statement)
+
+    def list_due_for_expiration(self, *, current_time: datetime) -> list[AccessGrantRecord]:
+        statement = (
+            select(AccessGrantRecord)
+            .where(AccessGrantRecord.expire_at <= current_time)
+            .where(
+                AccessGrantRecord.grant_status.in_(
+                    [
+                        "Active",
+                        "Expiring",
+                    ]
+                )
+            )
+            .order_by(AccessGrantRecord.expire_at.asc())
+        )
+        return self.scalars(statement)
+
 
 class ConnectorTaskRepository(SqlAlchemyRepository[ConnectorTaskRecord]):
     model = ConnectorTaskRecord
@@ -175,6 +214,31 @@ class ConnectorTaskRepository(SqlAlchemyRepository[ConnectorTaskRecord]):
             .order_by(ConnectorTaskRecord.created_at.desc())
         )
         return self.scalars(statement)
+
+
+class NotificationTaskRepository(SqlAlchemyRepository[NotificationTaskRecord]):
+    model = NotificationTaskRecord
+
+    def list_for_grant(self, grant_id: str) -> list[NotificationTaskRecord]:
+        statement = (
+            select(NotificationTaskRecord)
+            .where(NotificationTaskRecord.grant_id == grant_id)
+            .order_by(NotificationTaskRecord.created_at.desc())
+        )
+        return self.scalars(statement)
+
+    def get_latest_for_grant_and_type(
+        self,
+        grant_id: str,
+        task_type: str,
+    ) -> NotificationTaskRecord | None:
+        statement = (
+            select(NotificationTaskRecord)
+            .where(NotificationTaskRecord.grant_id == grant_id)
+            .where(NotificationTaskRecord.task_type == task_type)
+            .order_by(NotificationTaskRecord.created_at.desc())
+        )
+        return self.session.scalar(statement)
 
 
 class AuditRecordRepository(SqlAlchemyRepository[AuditRecordRecord]):

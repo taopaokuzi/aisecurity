@@ -12,13 +12,11 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 from apps.worker.tasks import register_tasks
-from packages.domain import DomainError, ErrorCode
 from packages.infrastructure.db import Base
 from packages.infrastructure.db.models import (
     AccessGrantRecord,
     AgentIdentityRecord,
     AuditRecordRecord,
-    ConnectorTaskRecord,
     DelegationCredentialRecord,
     NotificationTaskRecord,
     PermissionRequestEventRecord,
@@ -51,7 +49,7 @@ def ensure_test_database() -> None:
         admin_engine.dispose()
 
 
-class WorkerProvisionTaskIntegrationTests(unittest.TestCase):
+class WorkerGrantLifecycleTaskIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         ensure_test_database()
@@ -65,7 +63,7 @@ class WorkerProvisionTaskIntegrationTests(unittest.TestCase):
         Base.metadata.drop_all(cls.engine)
         Base.metadata.create_all(cls.engine)
         cls.celery_app = Celery(
-            "aisecurity.worker.test",
+            "aisecurity.worker.lifecycle.test",
             broker="memory://",
             backend="cache+memory://",
         )
@@ -80,14 +78,20 @@ class WorkerProvisionTaskIntegrationTests(unittest.TestCase):
         cls.engine.dispose()
 
     def setUp(self) -> None:
-        os.environ["FEISHU_CONNECTOR_PROVIDER"] = "stub"
-        os.environ["FEISHU_CONNECTOR_STUB_MODE"] = "accepted"
         self._truncate_tables()
         self._seed_identity_data()
 
-    def test_worker_task_persists_failed_writeback_when_connector_is_unavailable(self) -> None:
-        os.environ["FEISHU_CONNECTOR_STUB_MODE"] = "bogus"
-        self._seed_approved_request("req_worker_unavailable_001")
+    def test_worker_lifecycle_task_marks_expiring_and_expires_due_grants(self) -> None:
+        self._seed_active_request_and_grant(
+            request_id="req_worker_expiring_001",
+            grant_id="grt_worker_expiring_001",
+            expire_at=datetime.now(timezone.utc) + timedelta(hours=8),
+        )
+        self._seed_active_request_and_grant(
+            request_id="req_worker_expired_001",
+            grant_id="grt_worker_expired_001",
+            expire_at=datetime.now(timezone.utc) - timedelta(minutes=5),
+        )
 
         @contextmanager
         def session_scope_override(session_factory=None):
@@ -102,107 +106,49 @@ class WorkerProvisionTaskIntegrationTests(unittest.TestCase):
             finally:
                 session.close()
 
-        provision_task = self.celery_app.tasks["worker.grants.provision"]
-        with self.assertRaises(DomainError) as raised:
-            with mock.patch("apps.worker.tasks.session_scope", new=session_scope_override):
-                provision_task.run(
-                    grant_id="grt_worker_unavailable_001",
-                    permission_request_id="req_worker_unavailable_001",
-                    policy_version="perm-map.v1",
-                    delegation_id="dlg_123",
-                    api_request_id="req_trace_worker_001",
-                    operator_user_id="worker",
-                    force_retry=False,
-                    trace_id="trace_worker_001",
-                )
+        lifecycle_task = self.celery_app.tasks["worker.grants.lifecycle.reconcile"]
+        with mock.patch("apps.worker.tasks.session_scope", new=session_scope_override):
+            result = lifecycle_task.run()
 
-        self.assertEqual(raised.exception.code, ErrorCode.CONNECTOR_UNAVAILABLE)
+        self.assertEqual(result["expiring_count"], 1)
+        self.assertEqual(result["reminder_count"], 1)
+        self.assertEqual(result["expired_count"], 1)
 
         with self.session_factory() as session:
-            permission_request = session.get(PermissionRequestRecord, "req_worker_unavailable_001")
-            self.assertIsNotNone(permission_request)
-            assert permission_request is not None
-            self.assertEqual(permission_request.request_status, "Failed")
-            self.assertEqual(permission_request.grant_status, "ProvisionFailed")
-            self.assertEqual(permission_request.current_task_state, "Failed")
-            self.assertIn(
-                "Unsupported feishu connector stub mode: bogus",
-                permission_request.failed_reason or "",
-            )
+            expiring_grant = session.get(AccessGrantRecord, "grt_worker_expiring_001")
+            expired_grant = session.get(AccessGrantRecord, "grt_worker_expired_001")
+            self.assertIsNotNone(expiring_grant)
+            self.assertIsNotNone(expired_grant)
+            assert expiring_grant is not None
+            assert expired_grant is not None
+            self.assertEqual(expiring_grant.grant_status, "Expiring")
+            self.assertEqual(expired_grant.grant_status, "Expired")
 
-            grant = session.get(AccessGrantRecord, "grt_worker_unavailable_001")
-            self.assertIsNotNone(grant)
-            assert grant is not None
-            self.assertEqual(grant.grant_status, "ProvisionFailed")
-            self.assertEqual(grant.connector_status, "Failed")
-            self.assertEqual(grant.reconcile_status, "Error")
-
-            tasks = session.scalars(
-                select(ConnectorTaskRecord)
-                .where(ConnectorTaskRecord.grant_id == "grt_worker_unavailable_001")
-                .order_by(ConnectorTaskRecord.created_at.asc())
+            reminder_tasks = session.scalars(
+                select(NotificationTaskRecord)
+                .where(NotificationTaskRecord.grant_id == "grt_worker_expiring_001")
             ).all()
-            self.assertEqual(len(tasks), 1)
-            self.assertEqual(tasks[0].task_status, "Failed")
-            self.assertEqual(tasks[0].last_error_code, "CONNECTOR_UNAVAILABLE")
-            self.assertIn(
-                "Unsupported feishu connector stub mode: bogus",
-                tasks[0].last_error_message or "",
-            )
+            self.assertEqual(len(reminder_tasks), 1)
+            self.assertEqual(reminder_tasks[0].task_status, "Succeeded")
 
-            events = session.scalars(
+            expired_events = session.scalars(
                 select(PermissionRequestEventRecord)
-                .where(PermissionRequestEventRecord.request_id == "req_worker_unavailable_001")
+                .where(PermissionRequestEventRecord.request_id == "req_worker_expired_001")
                 .order_by(PermissionRequestEventRecord.created_at.asc())
             ).all()
             self.assertEqual(
-                [event.event_type for event in events],
-                ["grant.provisioning_requested", "grant.provision_failed"],
+                [event.event_type for event in expired_events],
+                ["grant.expiring", "grant.expired"],
             )
 
-            audits = session.scalars(
+            expired_audits = session.scalars(
                 select(AuditRecordRecord)
-                .where(AuditRecordRecord.request_id == "req_worker_unavailable_001")
+                .where(AuditRecordRecord.request_id == "req_worker_expired_001")
                 .order_by(AuditRecordRecord.created_at.asc())
             ).all()
             self.assertEqual(
-                [audit.event_type for audit in audits],
-                ["grant.provisioning_requested", "grant.provision_failed"],
-            )
-            self.assertEqual(audits[-1].result, "Fail")
-            self.assertIn(
-                "Unsupported feishu connector stub mode: bogus",
-                audits[-1].reason or "",
-            )
-
-    def _seed_approved_request(self, request_id: str) -> None:
-        now = datetime(2026, 4, 17, 12, 0, tzinfo=timezone.utc)
-        with self.session_factory.begin() as session:
-            session.add(
-                PermissionRequestRecord(
-                    request_id=request_id,
-                    user_id="user_001",
-                    agent_id="agent_perm_assistant_v1",
-                    delegation_id="dlg_123",
-                    raw_text="我需要查看销售部 Q3 报表",
-                    resource_key="sales.q3_report",
-                    resource_type="report",
-                    action="read",
-                    constraints_json=None,
-                    requested_duration="P7D",
-                    structured_request_json={"approval_route": ["manager"]},
-                    suggested_permission="report:sales.q3:read",
-                    risk_level="Medium",
-                    approval_status="Approved",
-                    grant_status="NotCreated",
-                    request_status="Approved",
-                    current_task_state="Succeeded",
-                    policy_version="perm-map.v1",
-                    renew_round=0,
-                    failed_reason=None,
-                    created_at=now,
-                    updated_at=now,
-                )
+                [audit.event_type for audit in expired_audits],
+                ["grant.expired"],
             )
 
     def _truncate_tables(self) -> None:
@@ -211,7 +157,6 @@ class WorkerProvisionTaskIntegrationTests(unittest.TestCase):
                 AuditRecordRecord,
                 NotificationTaskRecord,
                 PermissionRequestEventRecord,
-                ConnectorTaskRecord,
                 AccessGrantRecord,
                 PermissionRequestRecord,
                 DelegationCredentialRecord,
@@ -267,6 +212,61 @@ class WorkerProvisionTaskIntegrationTests(unittest.TestCase):
                     delegation_status="Active",
                     issued_at=now,
                     expire_at=now + timedelta(days=7),
+                    revoked_at=None,
+                    revocation_reason=None,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+
+    def _seed_active_request_and_grant(
+        self,
+        *,
+        request_id: str,
+        grant_id: str,
+        expire_at: datetime,
+    ) -> None:
+        now = datetime.now(timezone.utc)
+        with self.session_factory.begin() as session:
+            session.add(
+                PermissionRequestRecord(
+                    request_id=request_id,
+                    user_id="user_001",
+                    agent_id="agent_perm_assistant_v1",
+                    delegation_id="dlg_123",
+                    raw_text="我需要查看销售部 Q3 报表",
+                    resource_key="sales.q3_report",
+                    resource_type="report",
+                    action="read",
+                    constraints_json=None,
+                    requested_duration="P7D",
+                    structured_request_json={"approval_route": ["manager"]},
+                    suggested_permission="report:sales.q3:read",
+                    risk_level="Low",
+                    approval_status="Approved",
+                    grant_status="Active",
+                    request_status="Active",
+                    current_task_state="Succeeded",
+                    policy_version="perm-map.v1",
+                    renew_round=0,
+                    failed_reason=None,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            session.flush()
+            session.add(
+                AccessGrantRecord(
+                    grant_id=grant_id,
+                    request_id=request_id,
+                    resource_key="sales.q3_report",
+                    resource_type="report",
+                    action="read",
+                    grant_status="Active",
+                    connector_status="Applied",
+                    reconcile_status="Confirmed",
+                    effective_at=now - timedelta(minutes=5),
+                    expire_at=expire_at,
                     revoked_at=None,
                     revocation_reason=None,
                     created_at=now,

@@ -26,6 +26,13 @@ from .provisioning import (
     ProvisioningService,
     default_grant_id_for_request,
 )
+from .grant_lifecycle import (
+    GrantLifecycleProcessResult,
+    GrantLifecycleService,
+    GrantRenewInput,
+    GrantRenewResult,
+    GrantRenewalCompletionResult,
+)
 
 __all__ = [
     "ApprovalCallbackInput",
@@ -45,6 +52,11 @@ __all__ = [
     "PermissionRequestService",
     "GrantProvisionInput",
     "GrantProvisionResult",
+    "GrantLifecycleProcessResult",
+    "GrantLifecycleService",
+    "GrantRenewInput",
+    "GrantRenewResult",
+    "GrantRenewalCompletionResult",
     "ProvisioningService",
     "default_grant_id_for_request",
 ]

@@ -21,8 +21,8 @@ from packages.infrastructure.db import Base
 from packages.infrastructure.db.models import (
     AccessGrantRecord,
     AgentIdentityRecord,
+    ApprovalRecordRecord,
     AuditRecordRecord,
-    ConnectorTaskRecord,
     DelegationCredentialRecord,
     NotificationTaskRecord,
     PermissionRequestEventRecord,
@@ -55,7 +55,7 @@ def ensure_test_database() -> None:
         admin_engine.dispose()
 
 
-class GrantProvisionApiIntegrationTests(unittest.TestCase):
+class GrantRenewApiIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         ensure_test_database()
@@ -104,208 +104,133 @@ class GrantProvisionApiIntegrationTests(unittest.TestCase):
         cls.engine.dispose()
 
     def setUp(self) -> None:
-        os.environ["FEISHU_CONNECTOR_PROVIDER"] = "stub"
-        os.environ["FEISHU_CONNECTOR_STUB_MODE"] = "accepted"
         self._truncate_tables()
         self._seed_identity_data()
 
-    def test_provision_endpoint_creates_grant_and_connector_task(self) -> None:
-        self._seed_approved_request("req_grant_api_accepted_001")
+    def test_post_grant_renew_creates_follow_up_request(self) -> None:
+        self._seed_active_request_and_grant()
 
         status_code, payload = self._request(
             "POST",
-            "/grants/grt_grant_api_accepted_001/provision",
-            headers=self._headers("req_trace_grant_001"),
+            "/grants/grt_renew_api_001/renew",
+            headers=self._headers("req_trace_grant_renew_001"),
             request_body=json.dumps(
                 {
-                    "request_id": "req_grant_api_accepted_001",
-                    "policy_version": "perm-map.v1",
-                    "delegation_id": "dlg_123",
-                    "force_retry": False,
+                    "requested_duration": "P7D",
+                    "reason": "项目仍在进行，需要继续查看",
                 }
             ).encode("utf-8"),
         )
 
         self.assertEqual(status_code, 200)
-        self.assertEqual(payload["data"]["grant_status"], "Provisioning")
-        self.assertEqual(payload["data"]["connector_status"], "Accepted")
-        self.assertEqual(payload["data"]["request_status"], "Provisioning")
+        self.assertEqual(payload["data"]["grant_id"], "grt_renew_api_001")
+        self.assertEqual(payload["data"]["renew_round"], 1)
+        self.assertEqual(payload["data"]["request_status"], "PendingApproval")
 
         with self.session_factory() as session:
-            grant = session.get(AccessGrantRecord, "grt_grant_api_accepted_001")
-            self.assertIsNotNone(grant)
-            assert grant is not None
-            self.assertEqual(grant.grant_status, "Provisioning")
-            self.assertEqual(grant.connector_status, "Accepted")
-
-            tasks = session.scalars(
-                select(ConnectorTaskRecord)
-                .where(ConnectorTaskRecord.grant_id == "grt_grant_api_accepted_001")
+            requests = session.scalars(
+                select(PermissionRequestRecord).order_by(PermissionRequestRecord.created_at.asc())
             ).all()
-            self.assertEqual(len(tasks), 1)
-            self.assertEqual(tasks[0].task_status, "Succeeded")
+            self.assertEqual(len(requests), 2)
+
+            renewal_request = requests[-1]
+            renewal_context = renewal_request.structured_request_json["renewal_context"]
+            self.assertEqual(renewal_request.request_status, "PendingApproval")
+            self.assertEqual(renewal_request.grant_status, "Active")
+            self.assertEqual(renewal_request.renew_round, 1)
+            self.assertEqual(renewal_context["grant_id"], "grt_renew_api_001")
+            self.assertEqual(renewal_context["source_request_id"], "req_renew_api_001")
+            self.assertEqual(renewal_context["root_request_id"], "req_renew_api_001")
+            self.assertEqual(renewal_context["requested_duration"], "P7D")
+
+            approval_record = session.scalar(
+                select(ApprovalRecordRecord)
+                .where(ApprovalRecordRecord.request_id == renewal_request.request_id)
+                .order_by(ApprovalRecordRecord.created_at.desc())
+            )
+            self.assertIsNotNone(approval_record)
+            assert approval_record is not None
+            self.assertEqual(approval_record.request_id, renewal_request.request_id)
+            self.assertEqual(approval_record.approval_status, "Pending")
+            self.assertEqual(approval_record.approval_node, "manager")
+            self.assertTrue(approval_record.external_approval_id.startswith("feishu_apr_"))
 
             events = session.scalars(
                 select(PermissionRequestEventRecord)
-                .where(PermissionRequestEventRecord.request_id == "req_grant_api_accepted_001")
                 .order_by(PermissionRequestEventRecord.created_at.asc())
             ).all()
             self.assertEqual(
                 [event.event_type for event in events],
-                ["grant.provisioning_requested", "grant.accepted"],
+                ["grant.renew_requested", "grant.renew_requested", "approval.required"],
+            )
+            approval_event = events[-1]
+            self.assertEqual(approval_event.request_id, renewal_request.request_id)
+            self.assertEqual(
+                approval_event.metadata_json["approval_id"],
+                approval_record.approval_id,
             )
 
-    def test_provision_endpoint_marks_grant_active_when_connector_applies(self) -> None:
-        os.environ["FEISHU_CONNECTOR_STUB_MODE"] = "applied"
-        self._seed_approved_request("req_grant_api_applied_001")
+            approval_audit = session.scalar(
+                select(AuditRecordRecord)
+                .where(AuditRecordRecord.request_id == renewal_request.request_id)
+                .where(AuditRecordRecord.event_type == "approval.required")
+            )
+            self.assertIsNotNone(approval_audit)
+            assert approval_audit is not None
+            self.assertEqual(
+                approval_audit.metadata_json["approval_id"],
+                approval_record.approval_id,
+            )
+
+    def test_post_grant_renew_rolls_back_when_approval_submission_fails(self) -> None:
+        self._seed_active_request_and_grant(structured_request_json={})
 
         status_code, payload = self._request(
             "POST",
-            "/grants/grt_grant_api_applied_001/provision",
-            headers=self._headers("req_trace_grant_002"),
+            "/grants/grt_renew_api_001/renew",
+            headers=self._headers("req_trace_grant_renew_002"),
             request_body=json.dumps(
                 {
-                    "request_id": "req_grant_api_applied_001",
-                    "policy_version": "perm-map.v1",
-                    "delegation_id": "dlg_123",
-                    "force_retry": False,
+                    "requested_duration": "P7D",
+                    "reason": "项目仍在进行，需要继续查看",
                 }
             ).encode("utf-8"),
         )
 
-        self.assertEqual(status_code, 200)
-        self.assertEqual(payload["data"]["grant_status"], "Active")
-        self.assertEqual(payload["data"]["connector_status"], "Applied")
-        self.assertEqual(payload["data"]["request_status"], "Active")
-        self.assertIsNotNone(payload["data"]["effective_at"])
+        self.assertEqual(status_code, 409)
+        self.assertEqual(payload["error"]["code"], "REQUEST_STATUS_INVALID")
 
         with self.session_factory() as session:
-            permission_request = session.get(PermissionRequestRecord, "req_grant_api_applied_001")
-            self.assertIsNotNone(permission_request)
-            assert permission_request is not None
-            self.assertEqual(permission_request.request_status, "Active")
-            self.assertEqual(permission_request.grant_status, "Active")
-
-            audits = session.scalars(
-                select(AuditRecordRecord)
-                .where(AuditRecordRecord.request_id == "req_grant_api_applied_001")
-                .order_by(AuditRecordRecord.created_at.asc())
+            requests = session.scalars(
+                select(PermissionRequestRecord).order_by(PermissionRequestRecord.created_at.asc())
             ).all()
-            self.assertEqual(
-                [audit.event_type for audit in audits],
-                ["grant.provisioning_requested", "grant.provisioned"],
-            )
+            self.assertEqual(len(requests), 1)
+            self.assertEqual(requests[0].request_id, "req_renew_api_001")
+            self.assertEqual(requests[0].request_status, "Active")
 
-    def test_provision_endpoint_persists_failed_writeback_when_connector_is_unavailable(self) -> None:
-        os.environ["FEISHU_CONNECTOR_STUB_MODE"] = "bogus"
-        self._seed_approved_request("req_grant_api_unavailable_001")
+            approval_records = session.scalars(select(ApprovalRecordRecord)).all()
+            self.assertEqual(approval_records, [])
 
-        status_code, payload = self._request(
-            "POST",
-            "/grants/grt_grant_api_unavailable_001/provision",
-            headers=self._headers("req_trace_grant_003"),
-            request_body=json.dumps(
-                {
-                    "request_id": "req_grant_api_unavailable_001",
-                    "policy_version": "perm-map.v1",
-                    "delegation_id": "dlg_123",
-                    "force_retry": False,
-                }
-            ).encode("utf-8"),
-        )
-
-        self.assertEqual(status_code, 503)
-        self.assertEqual(payload["error"]["code"], "CONNECTOR_UNAVAILABLE")
-
-        with self.session_factory() as session:
-            permission_request = session.get(
-                PermissionRequestRecord,
-                "req_grant_api_unavailable_001",
-            )
-            self.assertIsNotNone(permission_request)
-            assert permission_request is not None
-            self.assertEqual(permission_request.request_status, "Failed")
-            self.assertEqual(permission_request.grant_status, "ProvisionFailed")
-            self.assertEqual(permission_request.current_task_state, "Failed")
-            self.assertIn(
-                "Unsupported feishu connector stub mode: bogus",
-                permission_request.failed_reason or "",
-            )
-
-            grant = session.get(AccessGrantRecord, "grt_grant_api_unavailable_001")
-            self.assertIsNotNone(grant)
-            assert grant is not None
-            self.assertEqual(grant.grant_status, "ProvisionFailed")
-            self.assertEqual(grant.connector_status, "Failed")
-            self.assertEqual(grant.reconcile_status, "Error")
-
-            tasks = session.scalars(
-                select(ConnectorTaskRecord)
-                .where(ConnectorTaskRecord.grant_id == "grt_grant_api_unavailable_001")
-                .order_by(ConnectorTaskRecord.created_at.asc())
-            ).all()
-            self.assertEqual(len(tasks), 1)
-            self.assertEqual(tasks[0].task_status, "Failed")
-            self.assertEqual(tasks[0].last_error_code, "CONNECTOR_UNAVAILABLE")
-            self.assertIn(
-                "Unsupported feishu connector stub mode: bogus",
-                tasks[0].last_error_message or "",
-            )
-
-            events = session.scalars(
-                select(PermissionRequestEventRecord)
-                .where(PermissionRequestEventRecord.request_id == "req_grant_api_unavailable_001")
-                .order_by(PermissionRequestEventRecord.created_at.asc())
-            ).all()
-            self.assertEqual(
-                [event.event_type for event in events],
-                ["grant.provisioning_requested", "grant.provision_failed"],
-            )
-
-            audits = session.scalars(
-                select(AuditRecordRecord)
-                .where(AuditRecordRecord.request_id == "req_grant_api_unavailable_001")
-                .order_by(AuditRecordRecord.created_at.asc())
-            ).all()
-            self.assertEqual(
-                [audit.event_type for audit in audits],
-                ["grant.provisioning_requested", "grant.provision_failed"],
-            )
-            self.assertEqual(audits[-1].result, "Fail")
-            self.assertIn(
-                "Unsupported feishu connector stub mode: bogus",
-                audits[-1].reason or "",
-            )
-
-    def _seed_approved_request(self, request_id: str) -> None:
-        now = datetime(2026, 4, 17, 12, 0, tzinfo=timezone.utc)
-        with self.session_factory.begin() as session:
-            session.add(
-                PermissionRequestRecord(
-                    request_id=request_id,
-                    user_id="user_001",
-                    agent_id="agent_perm_assistant_v1",
-                    delegation_id="dlg_123",
-                    raw_text="我需要查看销售部 Q3 报表",
-                    resource_key="sales.q3_report",
-                    resource_type="report",
-                    action="read",
-                    constraints_json=None,
-                    requested_duration="P7D",
-                    structured_request_json={"approval_route": ["manager"]},
-                    suggested_permission="report:sales.q3:read",
-                    risk_level="Medium",
-                    approval_status="Approved",
-                    grant_status="NotCreated",
-                    request_status="Approved",
-                    current_task_state="Succeeded",
-                    policy_version="perm-map.v1",
-                    renew_round=0,
-                    failed_reason=None,
-                    created_at=now,
-                    updated_at=now,
+            renew_events = session.scalars(
+                select(PermissionRequestEventRecord).where(
+                    PermissionRequestEventRecord.event_type == "grant.renew_requested"
                 )
-            )
+            ).all()
+            self.assertEqual(renew_events, [])
+
+            approval_events = session.scalars(
+                select(PermissionRequestEventRecord).where(
+                    PermissionRequestEventRecord.event_type == "approval.required"
+                )
+            ).all()
+            self.assertEqual(approval_events, [])
+
+            approval_audits = session.scalars(
+                select(AuditRecordRecord).where(
+                    AuditRecordRecord.event_type.in_(["grant.renew_requested", "approval.required"])
+                )
+            ).all()
+            self.assertEqual(approval_audits, [])
 
     def _truncate_tables(self) -> None:
         with self.session_factory.begin() as session:
@@ -313,8 +238,8 @@ class GrantProvisionApiIntegrationTests(unittest.TestCase):
                 AuditRecordRecord,
                 NotificationTaskRecord,
                 PermissionRequestEventRecord,
-                ConnectorTaskRecord,
                 AccessGrantRecord,
+                ApprovalRecordRecord,
                 PermissionRequestRecord,
                 DelegationCredentialRecord,
                 AgentIdentityRecord,
@@ -376,12 +301,69 @@ class GrantProvisionApiIntegrationTests(unittest.TestCase):
                 )
             )
 
+    def _seed_active_request_and_grant(
+        self,
+        *,
+        structured_request_json: dict[str, object] | None = None,
+    ) -> None:
+        now = datetime(2026, 4, 17, 9, 0, tzinfo=timezone.utc)
+        request_payload = structured_request_json
+        if request_payload is None:
+            request_payload = {"approval_route": ["manager"]}
+        with self.session_factory.begin() as session:
+            session.add(
+                PermissionRequestRecord(
+                    request_id="req_renew_api_001",
+                    user_id="user_001",
+                    agent_id="agent_perm_assistant_v1",
+                    delegation_id="dlg_123",
+                    raw_text="我需要查看销售部Q3报表",
+                    resource_key="sales.q3_report",
+                    resource_type="report",
+                    action="read",
+                    constraints_json=None,
+                    requested_duration="P7D",
+                    structured_request_json=request_payload,
+                    suggested_permission="report:sales.q3:read",
+                    risk_level="Low",
+                    approval_status="Approved",
+                    grant_status="Active",
+                    request_status="Active",
+                    current_task_state="Succeeded",
+                    policy_version="perm-map.v1",
+                    renew_round=0,
+                    failed_reason=None,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            session.flush()
+            session.add(
+                AccessGrantRecord(
+                    grant_id="grt_renew_api_001",
+                    request_id="req_renew_api_001",
+                    resource_key="sales.q3_report",
+                    resource_type="report",
+                    action="read",
+                    grant_status="Active",
+                    connector_status="Applied",
+                    reconcile_status="Confirmed",
+                    effective_at=now,
+                    expire_at=now + timedelta(days=3),
+                    revoked_at=None,
+                    revocation_reason=None,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+
     def _headers(self, request_id: str) -> dict[str, str]:
         return {
             "Content-Type": "application/json",
             "X-Request-Id": request_id,
-            "X-User-Id": "system_worker",
-            "X-Operator-Type": "System",
+            "X-User-Id": "user_001",
+            "X-Operator-Type": "User",
+            "Idempotency-Key": "renew-key-api-001",
         }
 
     def _request(
@@ -420,7 +402,7 @@ class GrantProvisionApiIntegrationTests(unittest.TestCase):
                         return
             except Exception:
                 time.sleep(0.1)
-        raise RuntimeError("Grant provision API test server did not become ready in time")
+        raise RuntimeError("Grant renew API test server did not become ready in time")
 
 
 if __name__ == "__main__":

@@ -10,22 +10,16 @@ from packages.application import (
     ApprovalCallbackInput,
     ApprovalCallbackPayload,
     ApprovalCallbackResult,
-    ApprovalService,
+    GrantLifecycleService,
     GrantProvisionInput,
     default_grant_id_for_request,
 )
 from packages.domain import ApprovalStatus, DomainError, ErrorCode, OperatorType
-from packages.infrastructure import (
-    ApprovalRecordRepository,
-    AuditRecordRepository,
-    PermissionRequestEventRepository,
-    PermissionRequestRepository,
-    create_approval_adapter,
-    create_approval_callback_verifier,
-)
+from packages.infrastructure import PermissionRequestRepository
 
+from .approval_submission import build_approval_service
 from .dependencies import get_db_session
-from .grants import build_provisioning_service
+from .grants import build_grant_lifecycle_service, build_provisioning_service
 
 router = APIRouter(tags=["approvals"])
 
@@ -52,17 +46,6 @@ class ApprovalCallbackData(BaseModel):
 class ApprovalCallbackResponse(BaseModel):
     request_id: str
     data: ApprovalCallbackData
-
-
-def build_approval_service(session: Session) -> ApprovalService:
-    return ApprovalService(
-        permission_request_repository=PermissionRequestRepository(session),
-        approval_repository=ApprovalRecordRepository(session),
-        permission_request_event_repository=PermissionRequestEventRepository(session),
-        audit_repository=AuditRecordRepository(session),
-        approval_adapter=create_approval_adapter(),
-        callback_verifier=create_approval_callback_verifier(),
-    )
 
 
 def build_callback_response(
@@ -134,23 +117,35 @@ async def handle_approval_callback(
         if not result.duplicated and result.approval_status is ApprovalStatus.APPROVED:
             request_record = PermissionRequestRepository(session).get(payload.request_id)
             if request_record is not None:
-                provisioning_service = build_provisioning_service(session)
+                lifecycle_service = build_grant_lifecycle_service(session)
                 try:
-                    provisioning_service.provision_grant(
-                        GrantProvisionInput(
-                            grant_id=default_grant_id_for_request(payload.request_id),
+                    renewal_context = GrantLifecycleService.extract_renewal_context(request_record)
+                    if renewal_context is not None:
+                        lifecycle_service.complete_approved_renewal(
                             permission_request_id=payload.request_id,
-                            policy_version=request_record.policy_version or "",
-                            delegation_id=request_record.delegation_id,
                             api_request_id=api_request_id,
                             operator_user_id=payload.approver_id or "approval_callback",
                             operator_type=OperatorType.SYSTEM,
                             trace_id=request.headers.get("X-Trace-Id"),
                         )
-                    )
+                    else:
+                        provisioning_service = build_provisioning_service(session)
+                        provisioning_service.provision_grant(
+                            GrantProvisionInput(
+                                grant_id=default_grant_id_for_request(payload.request_id),
+                                permission_request_id=payload.request_id,
+                                policy_version=request_record.policy_version or "",
+                                delegation_id=request_record.delegation_id,
+                                api_request_id=api_request_id,
+                                operator_user_id=payload.approver_id or "approval_callback",
+                                operator_type=OperatorType.SYSTEM,
+                                trace_id=request.headers.get("X-Trace-Id"),
+                            )
+                        )
                 except DomainError:
-                    # Approval callback has already been persisted; provisioning failure
-                    # is recorded by ProvisioningService and can be retried later.
+                    # Approval callback has already been persisted; downstream lifecycle
+                    # processing failure is recorded by the corresponding service and can
+                    # be retried later.
                     pass
         session.commit()
     except DomainError:

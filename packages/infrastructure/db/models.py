@@ -38,6 +38,7 @@ from packages.domain import (
 from .base import Base, TimestampMixin, enum_check_constraint, prefixed_id_column
 
 JSONObject = dict[str, Any]
+NOTIFICATION_TASK_STATUS_VALUES = (*TASK_STATUS_VALUES, "Cancelled")
 
 
 class UserRecord(TimestampMixin, Base):
@@ -343,6 +344,38 @@ class ConnectorTaskRecord(TimestampMixin, Base):
         default=3,
         server_default=text("3"),
     )
+    last_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_error_message: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    payload_json: Mapped[JSONObject | None] = mapped_column(JSONB, nullable=True)
+    scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class NotificationTaskRecord(TimestampMixin, Base):
+    __tablename__ = "notification_tasks"
+    __table_args__ = (
+        Index("idx_notification_tasks_grant_id_status", "grant_id", "task_status"),
+        Index("idx_notification_tasks_scheduled_at", "task_status", "scheduled_at"),
+        enum_check_constraint(
+            "task_status",
+            NOTIFICATION_TASK_STATUS_VALUES,
+            "ck_notification_tasks_task_status",
+        ),
+    )
+
+    task_id: Mapped[str] = prefixed_id_column()
+    grant_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("access_grants.grant_id", name="fk_notification_tasks_grants"),
+        nullable=False,
+    )
+    request_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("permission_requests.request_id", name="fk_notification_tasks_requests"),
+        nullable=False,
+    )
+    task_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    task_status: Mapped[str] = mapped_column(String(32), nullable=False)
     last_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     last_error_message: Mapped[str | None] = mapped_column(String(256), nullable=True)
     payload_json: Mapped[JSONObject | None] = mapped_column(JSONB, nullable=True)

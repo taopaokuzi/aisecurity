@@ -23,6 +23,7 @@ from packages.infrastructure.db.models import (
     ApprovalRecordRecord,
     AuditRecordRecord,
     DelegationCredentialRecord,
+    NotificationTaskRecord,
     PermissionRequestEventRecord,
     PermissionRequestRecord,
     UserRecord,
@@ -577,6 +578,7 @@ class PermissionRequestApiIntegrationTests(unittest.TestCase):
         with self.session_factory.begin() as session:
             for model in (
                 AuditRecordRecord,
+                NotificationTaskRecord,
                 PermissionRequestEventRecord,
                 ApprovalRecordRecord,
                 PermissionRequestRecord,

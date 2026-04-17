@@ -15,6 +15,12 @@ def create_celery_app() -> Celery:
     )
     celery_app.conf.update(
         accept_content=["json"],
+        beat_schedule={
+            "grant-lifecycle-reconcile-hourly": {
+                "task": "worker.grants.lifecycle.reconcile",
+                "schedule": 3600.0,
+            }
+        },
         broker_connection_retry_on_startup=True,
         enable_utc=True,
         result_serializer="json",

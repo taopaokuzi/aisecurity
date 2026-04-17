@@ -4,12 +4,13 @@ from datetime import datetime, timezone
 
 from celery import Celery
 
-from packages.application import GrantProvisionInput, ProvisioningService
+from packages.application import GrantLifecycleService, GrantProvisionInput, ProvisioningService
 from packages.domain import DomainError, ErrorCode, OperatorType
 from packages.infrastructure import (
     AccessGrantRepository,
     AuditRecordRepository,
     ConnectorTaskRepository,
+    NotificationTaskRepository,
     PermissionRequestEventRepository,
     PermissionRequestRepository,
     create_feishu_permission_connector,
@@ -20,6 +21,7 @@ REGISTERED_TASKS = (
     "worker.ping",
     "worker.runtime_summary",
     "worker.grants.provision",
+    "worker.grants.lifecycle.reconcile",
 )
 
 
@@ -110,4 +112,24 @@ def register_tasks(celery_app: Celery) -> None:
                         else None
                     ),
                     "retry_count": result.retry_count,
+                }
+
+    if "worker.grants.lifecycle.reconcile" not in celery_app.tasks:
+
+        @celery_app.task(name="worker.grants.lifecycle.reconcile")
+        def reconcile_grant_lifecycle() -> dict[str, int]:
+            with session_scope() as session:
+                service = GrantLifecycleService(
+                    permission_request_repository=PermissionRequestRepository(session),
+                    access_grant_repository=AccessGrantRepository(session),
+                    permission_request_event_repository=PermissionRequestEventRepository(session),
+                    audit_repository=AuditRecordRepository(session),
+                    notification_task_repository=NotificationTaskRepository(session),
+                )
+                result = service.process_grant_lifecycle()
+                session.commit()
+                return {
+                    "expiring_count": result.expiring_count,
+                    "reminder_count": result.reminder_count,
+                    "expired_count": result.expired_count,
                 }

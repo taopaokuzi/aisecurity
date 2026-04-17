@@ -117,6 +117,18 @@ Task 12 完成了 Provisioning Service 与飞书连接器开通链路：
 - 增加覆盖开通成功、立即生效、连接器不可用失败写回、审批通过后自动开通和 worker 失败写回的单元测试与集成测试
 - 在任务总表中把 `TASK-012` 标记为 `DONE / PASS`
 
+## Task 13
+
+Task 13 完成了授权生命周期、续期与到期处理链路：
+
+- 在 `packages/application` 中新增授权生命周期服务，负责授权续期申请、即将到期标记、提醒任务创建、到期自动回收和审批通过后的续期生效
+- 在 `packages/infrastructure` 中新增 `notification_tasks` 模型与仓储，给到期提醒和后续通知任务统一落库
+- 在 `apps/api` 中新增 `POST /grants/{id}/renew` 路由，并通过共享审批提交流水线把续期请求显式送入审批链路
+- 在 `apps/api/approvals.py` 中补上续期审批通过后的闭环处理：续期请求审批通过后会更新原授权过期时间并把新申请切换为 `Active`
+- 在 `apps/worker` 中新增生命周期巡检任务和 Celery beat 调度，用于周期性标记 `Expiring`、创建提醒并自动把已到期授权切到 `Expired`
+- 增加覆盖续期创建、续期审批提交回滚、审批通过后续期生效、即将到期提醒、自动过期回收和 worker 巡检的单元测试与集成测试
+- 在任务总表中把 `TASK-013` 标记为 `DONE / PASS`
+
 ## 环境准备
 
 1. 安装 Python 3.11、Node.js 20+、Docker、Docker Compose。
