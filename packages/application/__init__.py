@@ -1,6 +1,14 @@
 from __future__ import annotations
 
 from .delegations import DelegationCreateInput, DelegationService
+from .admin_tasks import (
+    FailedTaskQueryInput,
+    FailedTaskQueryResult,
+    FailedTaskService,
+    RetryConnectorTaskInput,
+    RetryConnectorTaskResult,
+)
+from .audit_queries import AuditQueryInput, AuditQueryResult, AuditQueryService
 from .approvals import (
     ApprovalCallbackInput,
     ApprovalCallbackPayload,
@@ -53,8 +61,14 @@ __all__ = [
     "ApprovalService",
     "ApprovalSubmissionResult",
     "ApprovalSubmitInput",
+    "AuditQueryInput",
+    "AuditQueryResult",
+    "AuditQueryService",
     "DelegationCreateInput",
     "DelegationService",
+    "FailedTaskQueryInput",
+    "FailedTaskQueryResult",
+    "FailedTaskService",
     "PermissionRequestCreateInput",
     "PermissionRequestEvaluationInput",
     "PermissionRequestEvaluationResult",
@@ -72,6 +86,8 @@ __all__ = [
     "AgentDisableInput",
     "AgentDisableResult",
     "ProvisioningService",
+    "RetryConnectorTaskInput",
+    "RetryConnectorTaskResult",
     "SessionAuthority",
     "SessionBindingInput",
     "SessionBindingResult",

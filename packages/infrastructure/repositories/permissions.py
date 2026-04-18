@@ -21,6 +21,18 @@ from .base import SqlAlchemyRepository
 class PermissionRequestRepository(SqlAlchemyRepository[PermissionRequestRecord]):
     model = PermissionRequestRecord
 
+    def list_by_ids(
+        self,
+        request_ids: list[str] | tuple[str, ...] | set[str],
+    ) -> list[PermissionRequestRecord]:
+        identifiers = tuple(dict.fromkeys(request_ids))
+        if not identifiers:
+            return []
+        statement = select(PermissionRequestRecord).where(
+            PermissionRequestRecord.request_id.in_(identifiers)
+        )
+        return self.scalars(statement)
+
     def list_paginated(
         self,
         *,
@@ -122,6 +134,31 @@ class ApprovalRecordRepository(SqlAlchemyRepository[ApprovalRecordRecord]):
         )
         return self.scalars(statement)
 
+    def list_by_ids(
+        self,
+        approval_ids: list[str] | tuple[str, ...] | set[str],
+    ) -> list[ApprovalRecordRecord]:
+        identifiers = tuple(dict.fromkeys(approval_ids))
+        if not identifiers:
+            return []
+        statement = select(ApprovalRecordRecord).where(
+            ApprovalRecordRecord.approval_id.in_(identifiers)
+        )
+        return self.scalars(statement)
+
+    def list_callback_failed(
+        self,
+        *,
+        request_id: str | None = None,
+    ) -> list[ApprovalRecordRecord]:
+        statement = select(ApprovalRecordRecord).where(
+            ApprovalRecordRecord.approval_status == "CallbackFailed"
+        )
+        if request_id is not None:
+            statement = statement.where(ApprovalRecordRecord.request_id == request_id)
+        statement = statement.order_by(ApprovalRecordRecord.updated_at.desc())
+        return self.scalars(statement)
+
 
 class AccessGrantRepository(SqlAlchemyRepository[AccessGrantRecord]):
     model = AccessGrantRecord
@@ -138,6 +175,30 @@ class AccessGrantRepository(SqlAlchemyRepository[AccessGrantRecord]):
         statement = (
             select(AccessGrantRecord)
             .where(AccessGrantRecord.request_id == request_id)
+            .order_by(AccessGrantRecord.created_at.desc())
+        )
+        return self.scalars(statement)
+
+    def list_by_ids(
+        self,
+        grant_ids: list[str] | tuple[str, ...] | set[str],
+    ) -> list[AccessGrantRecord]:
+        identifiers = tuple(dict.fromkeys(grant_ids))
+        if not identifiers:
+            return []
+        statement = select(AccessGrantRecord).where(AccessGrantRecord.grant_id.in_(identifiers))
+        return self.scalars(statement)
+
+    def list_for_requests(
+        self,
+        request_ids: list[str] | tuple[str, ...] | set[str],
+    ) -> list[AccessGrantRecord]:
+        identifiers = tuple(dict.fromkeys(request_ids))
+        if not identifiers:
+            return []
+        statement = (
+            select(AccessGrantRecord)
+            .where(AccessGrantRecord.request_id.in_(identifiers))
             .order_by(AccessGrantRecord.created_at.desc())
         )
         return self.scalars(statement)
@@ -192,6 +253,16 @@ class AccessGrantRepository(SqlAlchemyRepository[AccessGrantRecord]):
 class ConnectorTaskRepository(SqlAlchemyRepository[ConnectorTaskRecord]):
     model = ConnectorTaskRecord
 
+    def list_by_ids(
+        self,
+        task_ids: list[str] | tuple[str, ...] | set[str],
+    ) -> list[ConnectorTaskRecord]:
+        identifiers = tuple(dict.fromkeys(task_ids))
+        if not identifiers:
+            return []
+        statement = select(ConnectorTaskRecord).where(ConnectorTaskRecord.task_id.in_(identifiers))
+        return self.scalars(statement)
+
     def list_for_grant(self, grant_id: str) -> list[ConnectorTaskRecord]:
         statement = (
             select(ConnectorTaskRecord)
@@ -213,6 +284,31 @@ class ConnectorTaskRepository(SqlAlchemyRepository[ConnectorTaskRecord]):
             select(ConnectorTaskRecord)
             .where(ConnectorTaskRecord.request_id == request_id)
             .order_by(ConnectorTaskRecord.created_at.desc())
+        )
+        return self.scalars(statement)
+
+    def list_failed(
+        self,
+        *,
+        task_type: str | None = None,
+        task_status: str | None = None,
+        request_id: str | None = None,
+        grant_id: str | None = None,
+    ) -> list[ConnectorTaskRecord]:
+        statement = select(ConnectorTaskRecord)
+        if task_status is None:
+            statement = statement.where(ConnectorTaskRecord.task_status == "Failed")
+        else:
+            statement = statement.where(ConnectorTaskRecord.task_status == task_status)
+        if task_type is not None:
+            statement = statement.where(ConnectorTaskRecord.task_type == task_type)
+        if request_id is not None:
+            statement = statement.where(ConnectorTaskRecord.request_id == request_id)
+        if grant_id is not None:
+            statement = statement.where(ConnectorTaskRecord.grant_id == grant_id)
+        statement = statement.order_by(
+            ConnectorTaskRecord.updated_at.desc(),
+            ConnectorTaskRecord.created_at.desc(),
         )
         return self.scalars(statement)
 
@@ -280,6 +376,44 @@ class NotificationTaskRepository(SqlAlchemyRepository[NotificationTaskRecord]):
 class AuditRecordRepository(SqlAlchemyRepository[AuditRecordRecord]):
     model = AuditRecordRecord
 
+    def search_paginated(
+        self,
+        *,
+        request_id: str | None = None,
+        event_type: str | None = None,
+        actor_type: str | None = None,
+        actor_id: str | None = None,
+        created_from: datetime | None = None,
+        created_to: datetime | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[AuditRecordRecord], int]:
+        filters = []
+        if request_id is not None:
+            filters.append(AuditRecordRecord.request_id == request_id)
+        if event_type is not None:
+            filters.append(AuditRecordRecord.event_type == event_type)
+        if actor_type is not None:
+            filters.append(AuditRecordRecord.actor_type == actor_type)
+        if actor_id is not None:
+            filters.append(AuditRecordRecord.actor_id == actor_id)
+        if created_from is not None:
+            filters.append(AuditRecordRecord.created_at >= created_from)
+        if created_to is not None:
+            filters.append(AuditRecordRecord.created_at <= created_to)
+
+        statement = self._apply_filters(select(AuditRecordRecord), filters).order_by(
+            AuditRecordRecord.created_at.desc(),
+            AuditRecordRecord.audit_id.desc(),
+        )
+        statement = statement.offset((page - 1) * page_size).limit(page_size)
+        count_statement = self._apply_filters(
+            select(func.count()).select_from(AuditRecordRecord),
+            filters,
+        )
+        total = self.session.scalar(count_statement) or 0
+        return self.scalars(statement), int(total)
+
     def list_for_request(self, request_id: str, *, limit: int | None = 100) -> list[AuditRecordRecord]:
         statement = (
             select(AuditRecordRecord)
@@ -325,6 +459,15 @@ class AuditRecordRepository(SqlAlchemyRepository[AuditRecordRecord]):
             statement = statement.limit(limit)
         return self.scalars(statement)
 
+    def _apply_filters(
+        self,
+        statement: Select,
+        filters: list[object],
+    ) -> Select:
+        if not filters:
+            return statement
+        return statement.where(*filters)
+
 
 class SessionContextRepository(SqlAlchemyRepository[SessionContextRecord]):
     model = SessionContextRecord
@@ -349,6 +492,28 @@ class SessionContextRepository(SqlAlchemyRepository[SessionContextRecord]):
             statement = statement.where(SessionContextRecord.session_status.in_(statuses))
         if limit is not None:
             statement = statement.limit(limit)
+        return self.scalars(statement)
+
+    def list_by_ids(
+        self,
+        session_ids: list[str] | tuple[str, ...] | set[str],
+    ) -> list[SessionContextRecord]:
+        identifiers = tuple(dict.fromkeys(session_ids))
+        if not identifiers:
+            return []
+        statement = select(SessionContextRecord).where(
+            SessionContextRecord.global_session_id.in_(identifiers)
+        )
+        return self.scalars(statement)
+
+    def list_by_grant_ids(
+        self,
+        grant_ids: list[str] | tuple[str, ...] | set[str],
+    ) -> list[SessionContextRecord]:
+        identifiers = tuple(dict.fromkeys(grant_ids))
+        if not identifiers:
+            return []
+        statement = select(SessionContextRecord).where(SessionContextRecord.grant_id.in_(identifiers))
         return self.scalars(statement)
 
     def list_for_statuses(

@@ -141,6 +141,18 @@ Task 14 完成了 Session Authority 与撤销链路：
 - 增加覆盖手工撤销、撤销成功 `Revoked`、撤销失败 `SyncFailed`、授权生效后建立会话、授权到期联动撤销、以及 worker 撤销处理的单元测试与集成测试
 - 在任务总表中把 `TASK-014` 标记为 `DONE / PASS`
 
+## Task 15
+
+Task 15 完成了审计查询与异常补偿 API：
+
+- 在 `packages/application` 中新增审计查询服务和失败任务服务，负责查询完整申请链路、识别失败的 connector/callback 任务，并提供人工重试入口
+- 在 `packages/application/_chain_views.py` 与 `apps/api/management_models.py` 中新增申请、授权、任务、会话、审批的关联视图模型，统一返回后台管理接口所需结构
+- 在 `apps/api` 中新增 `GET /audit-records`、`GET /admin/failed-tasks` 和 `POST /admin/connector-tasks/{id}/retry` 路由，并接入主应用入口
+- 在 `packages/infrastructure/repositories` 中补充审计分页查询、失败任务筛选，以及按批量 ID 回查 request/grant/task/session/approval 的能力
+- 人工重试会补写审计记录，并区分允许重试和拒绝重试场景，避免对已成功或不该重试的任务重复执行
+- 增加覆盖单条申请链路审计查询、审计分页、失败任务列表、允许重试和拒绝非法重试的集成测试
+- 在任务总表中把 `TASK-015` 标记为 `DONE / PASS`
+
 ## 环境准备
 
 1. 安装 Python 3.11、Node.js 20+、Docker、Docker Compose。
