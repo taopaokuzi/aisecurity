@@ -1,0 +1,20 @@
+import { NextResponse } from "next/server";
+
+import { evaluatePermissionRequestAsSystem } from "../../../../../../lib/employee-request-api";
+
+export async function POST(_request, { params }) {
+  try {
+    const result = await evaluatePermissionRequestAsSystem(params.requestId);
+    return NextResponse.json(result.payload, { status: result.status });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "UPSTREAM_UNAVAILABLE",
+          message: error instanceof Error ? error.message : "Backend request failed",
+        },
+      },
+      { status: 502 }
+    );
+  }
+}

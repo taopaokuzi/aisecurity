@@ -153,6 +153,18 @@ Task 15 完成了审计查询与异常补偿 API：
 - 增加覆盖单条申请链路审计查询、审计分页、失败任务列表、允许重试和拒绝非法重试的集成测试
 - 在任务总表中把 `TASK-015` 标记为 `DONE / PASS`
 
+## Task 16
+
+Task 16 完成了员工端申请与状态页面：
+
+- 在 `apps/web/app/employee/requests/new`、`/employee/requests`、`/employee/requests/[requestId]` 中新增申请页、状态页和详情页，覆盖员工侧最小联调路径
+- 在 `apps/web/components` 中新增申请表单、申请列表、申请详情、状态标签和员工端壳层组件，统一承担页面布局、状态展示和交互反馈
+- 在 `apps/web/app/api/employee/**` 与 `apps/web/lib/**` 中新增前端代理与浏览器客户端，把员工端提交申请、查询列表、读取详情和同步评估的调用封装起来
+- 页面会展示 `request_status`、`approval_status`、`grant_status`、建议权限、风险等级和解析后的资源字段，便于员工自助查看流程进度
+- 增加基础前端测试，覆盖提交申请、查看申请列表、查看申请详情和状态字段渲染
+- 补充 `vitest` 测试配置，并更新 Web 依赖与锁文件，支持本地执行 `npm run test`、`npm run lint` 和 `npm run build`
+- 在任务总表中把 `TASK-016` 标记为 `DONE / PASS`
+
 ## 环境准备
 
 1. 安装 Python 3.11、Node.js 20+、Docker、Docker Compose。

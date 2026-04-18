@@ -1,8 +1,8 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "aisecurity runtime",
-  description: "Minimal Next.js runtime entry for the aisecurity project.",
+  title: "aisecurity employee request ui",
+  description: "Employee-facing permission request, status, and detail pages.",
 };
 
 export default function RootLayout({ children }) {
