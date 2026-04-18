@@ -301,6 +301,8 @@ class FailedTaskService:
                     message="Retry task was not created for the requested session revoke",
                     details={"task_id": task.task_id, "http_status": 409},
                 )
+            # Ensure the newly created retry task is visible before immediate in-session processing.
+            self.connector_task_repository.session.flush()
             self.session_authority.process_session_revoke_task(retry_task_id)
             retry_task = self.connector_task_repository.get(retry_task_id)
             current_request = self._get_request_record(task.request_id)

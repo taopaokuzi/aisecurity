@@ -177,6 +177,18 @@ Task 17 完成了管理后台与补偿页面：
 - 增加基础前端测试，覆盖审计查询、失败任务列表、retry 成功和 retry 不可用提示
 - 在任务总表中把 `TASK-017` 标记为 `DONE / PASS`
 
+## Task 18
+
+Task 18 完成了 Mock Feishu 与集成 / E2E 用例：
+
+- 在 `tests/support/mock_feishu.py` 中新增 mock Feishu 服务，覆盖审批回调投递、权限开通和 session 撤销三类模拟接口
+- 在 `tests/support/feishu_flow.py` 中新增联调 harness，统一负责启动 API、mock 服务、数据库初始化和 worker 触发，给集成测试与 E2E 复用
+- 在 `tests/integration/test_feishu_flow_integration.py` 中补上审批通过、审批驳回、重复回调、开通失败后重试、延迟生效、自动回收、Agent 停用联动撤销和撤销失败补偿等关键集成场景
+- 在 `tests/e2e/test_permission_workflows_e2e.py` 中补上员工申请销售 Q3 只读权限、跨部门高敏访问审批、审批通过但开通失败、授权到期自动回收、Agent 停用后撤销生效等端到端场景
+- 在 `scripts/run_task_018_tests.py` 与 `scripts/run_task_018_tests.sh` 中新增标准执行入口，默认优先复用外部 PostgreSQL，不可达时自动启动嵌入式真实 PostgreSQL 执行整套验证
+- 在 `packages/application/admin_tasks.py` 中补了 session revoke retry 的事务内 flush，避免补偿重试后立即处理时读不到新任务
+- 在任务总表中把 `TASK-018` 标记为 `DONE / PASS`
+
 ## 环境准备
 
 1. 安装 Python 3.11、Node.js 20+、Docker、Docker Compose。
