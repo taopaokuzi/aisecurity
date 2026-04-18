@@ -165,6 +165,18 @@ Task 16 完成了员工端申请与状态页面：
 - 补充 `vitest` 测试配置，并更新 Web 依赖与锁文件，支持本地执行 `npm run test`、`npm run lint` 和 `npm run build`
 - 在任务总表中把 `TASK-016` 标记为 `DONE / PASS`
 
+## Task 17
+
+Task 17 完成了管理后台与补偿页面：
+
+- 在 `apps/web/app/admin`、`/admin/audit`、`/admin/failed-tasks`、`/admin/compensation` 中新增后台入口、审计查询页、失败任务页和补偿 retry 页
+- 在 `apps/web/components` 中新增后台壳层、审计控制台、失败任务控制台和补偿控制台组件，统一处理后台布局、筛选条件和结果展示
+- 在 `apps/web/app/api/admin/**` 与 `apps/web/lib/admin-*.js` 中新增前端代理与浏览器客户端，把审计查询、失败任务查询和 retry 操作全部通过 TASK-015 的后端 API 转发
+- 首页和全局 metadata 已补充管理后台入口，前端状态展示也扩展了 task 状态与失败摘要，方便快速定位失败链路
+- 补偿页对 retry 做了显式提示和二次确认，只允许 ITAdmin 对可 retry 任务发起补偿，不在前端直接改状态
+- 增加基础前端测试，覆盖审计查询、失败任务列表、retry 成功和 retry 不可用提示
+- 在任务总表中把 `TASK-017` 标记为 `DONE / PASS`
+
 ## 环境准备
 
 1. 安装 Python 3.11、Node.js 20+、Docker、Docker Compose。

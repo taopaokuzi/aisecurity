@@ -42,6 +42,14 @@ const RISK_LEVEL_META = {
   Critical: { label: "极高", tone: "danger" },
 };
 
+const TASK_STATUS_META = {
+  Pending: { label: "待处理", tone: "warning" },
+  Running: { label: "执行中", tone: "info" },
+  Retrying: { label: "重试中", tone: "warning" },
+  Failed: { label: "失败", tone: "danger" },
+  Succeeded: { label: "成功", tone: "success" },
+};
+
 function humanizeToken(value) {
   if (!value) {
     return "未提供";
@@ -63,6 +71,10 @@ export function getStatusMeta(kind, value) {
 
   if (kind === "grant") {
     return GRANT_STATUS_META[value] ?? fallback;
+  }
+
+  if (kind === "task") {
+    return TASK_STATUS_META[value] ?? fallback;
   }
 
   return fallback;

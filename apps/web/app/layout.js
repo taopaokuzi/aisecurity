@@ -1,8 +1,8 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "aisecurity employee request ui",
-  description: "Employee-facing permission request, status, and detail pages.",
+  title: "aisecurity web console",
+  description: "Employee request pages and admin audit/compensation console.",
 };
 
 export default function RootLayout({ children }) {

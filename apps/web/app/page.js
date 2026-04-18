@@ -6,22 +6,22 @@ import styles from "../components/employee-request-ui.module.css";
 export default function HomePage() {
   return (
     <EmployeeShell
-      eyebrow="Employee Permission Center"
-      title="员工端最小联调入口"
-      description="当前 Web 端已经聚焦到员工申请、状态查询和详情查看三条最小可用路径，方便直接和后端权限申请接口联调。"
+      eyebrow="Permission Web Console"
+      title="员工端与管理后台入口"
+      description="当前 Web 端已经覆盖员工申请链路与管理后台最小联调页面，既能提交申请，也能查询审计、失败任务和补偿 retry。"
       activeHref="/employee/requests/new"
       aside={
         <>
           <h2 className={styles.sectionTitle}>联调建议</h2>
           <ul className={styles.helperList}>
-            <li>先在申请页填写员工上下文并提交自然语言申请。</li>
-            <li>再去状态页查看 `request_status / approval_status / grant_status`。</li>
-            <li>最后到详情页核对建议权限、风险等级和资源信息。</li>
+            <li>员工链路：先提交申请，再查看状态和详情。</li>
+            <li>管理链路：先查审计，再看失败任务，最后按需发起 retry。</li>
+            <li>管理后台所有操作都通过 TASK-015 的 API 联调，不写死后台数据。</li>
           </ul>
         </>
       }
     >
-      <section className={styles.gridTwo}>
+      <section className={styles.requestList}>
         <article className={styles.surfaceCard}>
           <h2 className={styles.sectionTitle}>发起权限申请</h2>
           <p className={styles.sectionHint}>
@@ -41,6 +41,17 @@ export default function HomePage() {
           <div className={styles.linkRow}>
             <Link className={styles.buttonGhost} href="/employee/requests">
               打开状态页
+            </Link>
+          </div>
+        </article>
+        <article className={styles.surfaceCard}>
+          <h2 className={styles.sectionTitle}>管理后台</h2>
+          <p className={styles.sectionHint}>
+            进入审计查询、失败任务列表和补偿 retry 页面，定位失败链路并执行最小补偿操作。
+          </p>
+          <div className={styles.linkRow}>
+            <Link className={styles.buttonGhost} href="/admin">
+              打开管理后台
             </Link>
           </div>
         </article>
