@@ -10,6 +10,7 @@ from .permissions import (
     NotificationTaskRepository,
     PermissionRequestEventRepository,
     PermissionRequestRepository,
+    SessionContextRepository,
 )
 
 __all__ = [
@@ -22,6 +23,7 @@ __all__ = [
     "NotificationTaskRepository",
     "PermissionRequestEventRepository",
     "PermissionRequestRepository",
+    "SessionContextRepository",
     "SqlAlchemyRepository",
     "UserRepository",
 ]

@@ -39,6 +39,7 @@ from packages.infrastructure.repositories import (
     PermissionRequestEventRepository,
     PermissionRequestRepository,
 )
+from .session_authority import SessionAuthority, SessionBindingInput
 
 _PROVISION_OPERATORS = frozenset(
     {
@@ -109,6 +110,7 @@ class ProvisioningService:
         permission_request_event_repository: PermissionRequestEventRepository,
         audit_repository: AuditRecordRepository,
         connector: FeishuPermissionConnector,
+        session_authority: SessionAuthority | None = None,
         now_provider: Callable[[], datetime] = _utc_now,
         max_retry_count: int = _DEFAULT_MAX_RETRY_COUNT,
     ) -> None:
@@ -118,6 +120,7 @@ class ProvisioningService:
         self.permission_request_event_repository = permission_request_event_repository
         self.audit_repository = audit_repository
         self.connector = connector
+        self.session_authority = session_authority
         self.now_provider = now_provider
         self.max_retry_count = max_retry_count
 
@@ -424,6 +427,18 @@ class ProvisioningService:
             task.task_status = TaskStatus.SUCCEEDED.value
             task.last_error_code = None
             task.last_error_message = None
+
+            if self.session_authority is not None:
+                self.session_authority.bind_active_session(
+                    SessionBindingInput(
+                        grant_id=grant_record.grant_id,
+                        request_id=request_record.request_id,
+                        agent_id=request_record.agent_id,
+                        user_id=request_record.user_id,
+                        connector_session_ref=response.provider_task_id or response.provider_request_id,
+                        task_session_id=task.task_id,
+                    )
+                )
 
             self._record_event(
                 request_record=request_record,

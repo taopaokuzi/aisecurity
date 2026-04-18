@@ -31,6 +31,7 @@ from packages.domain import (
     OPERATOR_TYPE_VALUES,
     REQUEST_STATUS_VALUES,
     RISK_LEVEL_VALUES,
+    SESSION_STATUS_VALUES,
     TASK_STATUS_VALUES,
     USER_STATUS_VALUES,
 )
@@ -307,6 +308,45 @@ class AccessGrantRecord(TimestampMixin, Base):
     expire_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revocation_reason: Mapped[str | None] = mapped_column(String(256), nullable=True)
+
+
+class SessionContextRecord(TimestampMixin, Base):
+    __tablename__ = "session_contexts"
+    __table_args__ = (
+        UniqueConstraint("grant_id", name="uk_session_contexts_grant_id"),
+        Index("idx_session_contexts_request_id", "request_id"),
+        Index("idx_session_contexts_status", "session_status"),
+        Index("idx_session_contexts_agent_status", "agent_id", "session_status"),
+        enum_check_constraint("session_status", SESSION_STATUS_VALUES, "ck_session_contexts_session_status"),
+    )
+
+    global_session_id: Mapped[str] = prefixed_id_column()
+    grant_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("access_grants.grant_id", name="fk_session_contexts_grants"),
+        nullable=False,
+    )
+    request_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("permission_requests.request_id", name="fk_session_contexts_requests"),
+        nullable=False,
+    )
+    agent_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("agent_identities.agent_id", name="fk_session_contexts_agents"),
+        nullable=False,
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("users.user_id", name="fk_session_contexts_users"),
+        nullable=False,
+    )
+    task_session_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    connector_session_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    session_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    revocation_reason: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    last_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ConnectorTaskRecord(TimestampMixin, Base):

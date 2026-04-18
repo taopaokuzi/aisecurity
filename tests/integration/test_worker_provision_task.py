@@ -23,6 +23,7 @@ from packages.infrastructure.db.models import (
     NotificationTaskRecord,
     PermissionRequestEventRecord,
     PermissionRequestRecord,
+    SessionContextRecord,
     UserRecord,
 )
 
@@ -212,6 +213,7 @@ class WorkerProvisionTaskIntegrationTests(unittest.TestCase):
                 NotificationTaskRecord,
                 PermissionRequestEventRecord,
                 ConnectorTaskRecord,
+                SessionContextRecord,
                 AccessGrantRecord,
                 PermissionRequestRecord,
                 DelegationCredentialRecord,

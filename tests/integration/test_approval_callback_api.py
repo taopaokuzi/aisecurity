@@ -30,6 +30,7 @@ from packages.infrastructure.db.models import (
     NotificationTaskRecord,
     PermissionRequestEventRecord,
     PermissionRequestRecord,
+    SessionContextRecord,
     UserRecord,
 )
 
@@ -406,6 +407,7 @@ class ApprovalCallbackApiIntegrationTests(unittest.TestCase):
                 NotificationTaskRecord,
                 PermissionRequestEventRecord,
                 ConnectorTaskRecord,
+                SessionContextRecord,
                 AccessGrantRecord,
                 ApprovalRecordRecord,
                 PermissionRequestRecord,

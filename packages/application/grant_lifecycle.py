@@ -32,6 +32,7 @@ from packages.infrastructure.repositories import (
     PermissionRequestEventRepository,
     PermissionRequestRepository,
 )
+from .session_authority import SessionAuthority
 
 _REMINDER_TASK_TYPE = "GrantExpirationReminder"
 _DURATION_PATTERN = re.compile(r"^P(?:(?P<days>\d+)D)?(?:T(?:(?P<hours>\d+)H)?)?$")
@@ -110,6 +111,7 @@ class GrantLifecycleService:
         permission_request_event_repository: PermissionRequestEventRepository,
         audit_repository: AuditRecordRepository,
         notification_task_repository: NotificationTaskRepository,
+        session_authority: SessionAuthority | None = None,
         now_provider: Callable[[], datetime] = _utc_now,
         reminder_lead_time: timedelta = _DEFAULT_REMINDER_LEAD_TIME,
     ) -> None:
@@ -118,6 +120,7 @@ class GrantLifecycleService:
         self.permission_request_event_repository = permission_request_event_repository
         self.audit_repository = audit_repository
         self.notification_task_repository = notification_task_repository
+        self.session_authority = session_authority
         self.now_provider = now_provider
         self.reminder_lead_time = reminder_lead_time
 
@@ -348,6 +351,16 @@ class GrantLifecycleService:
         renewal_request.current_task_state = TaskStatus.SUCCEEDED.value
         renewal_request.updated_at = now
 
+        if self.session_authority is not None:
+            self.session_authority.refresh_session_request_binding(
+                grant_id=grant_record.grant_id,
+                request_id=renewal_request.request_id,
+                operator_user_id=operator_user_id,
+                api_request_id=api_request_id,
+                operator_type=normalized_operator_type,
+                trace_id=trace_id,
+            )
+
         self._record_event(
             request_record=source_request,
             occurred_at=now,
@@ -511,6 +524,18 @@ class GrantLifecycleService:
                     "auto_reclaimed": True,
                 },
             )
+            if self.session_authority is not None:
+                try:
+                    self.session_authority.request_revoke_for_grant_expiration(
+                        grant_id=grant_record.grant_id,
+                        reason="Grant expired and the linked session must be revoked",
+                        api_request_id=f"grant_lifecycle_expire_{grant_record.grant_id}",
+                        operator_user_id="grant_lifecycle_worker",
+                        operator_type=OperatorType.SYSTEM,
+                    )
+                except DomainError as exc:
+                    if exc.code not in {ErrorCode.SESSION_ALREADY_REVOKED, ErrorCode.RETRY_NOT_ALLOWED}:
+                        raise
             expired_count += 1
         return expired_count
 

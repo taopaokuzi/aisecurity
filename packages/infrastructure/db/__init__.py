@@ -11,6 +11,7 @@ from .models import (
     NotificationTaskRecord,
     PermissionRequestEventRecord,
     PermissionRequestRecord,
+    SessionContextRecord,
     UserRecord,
 )
 from .session import create_sync_engine, get_database_url, get_engine, get_session_factory, session_scope
@@ -26,6 +27,7 @@ __all__ = [
     "NotificationTaskRecord",
     "PermissionRequestEventRecord",
     "PermissionRequestRecord",
+    "SessionContextRecord",
     "UserRecord",
     "create_sync_engine",
     "get_database_url",

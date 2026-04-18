@@ -129,6 +129,18 @@ Task 13 完成了授权生命周期、续期与到期处理链路：
 - 增加覆盖续期创建、续期审批提交回滚、审批通过后续期生效、即将到期提醒、自动过期回收和 worker 巡检的单元测试与集成测试
 - 在任务总表中把 `TASK-013` 标记为 `DONE / PASS`
 
+## Task 14
+
+Task 14 完成了 Session Authority 与撤销链路：
+
+- 在 `packages/application` 中新增 Session Authority，负责全局会话绑定、会话状态校验、人工撤销、Agent 停用联动撤销，以及撤销任务处理
+- 在 `packages/infrastructure` 中新增 `session_contexts` 模型与仓储，并补上会话撤销的 Feishu Session Connector stub
+- 在 `apps/api` 中新增 `POST /sessions/revoke` 路由，并把 Session Authority 接到现有 API 与授权链路里
+- 在授权开通成功后会自动建立全局 session；在授权到期、人工撤销或 Agent 停用时，会创建撤销任务并推动 grant/session 同步状态迁移
+- 在 `apps/worker` 中新增待处理会话撤销任务处理入口，并让生命周期任务在授权过期时联动触发 session revoke
+- 增加覆盖手工撤销、撤销成功 `Revoked`、撤销失败 `SyncFailed`、授权生效后建立会话、授权到期联动撤销、以及 worker 撤销处理的单元测试与集成测试
+- 在任务总表中把 `TASK-014` 标记为 `DONE / PASS`
+
 ## 环境准备
 
 1. 安装 Python 3.11、Node.js 20+、Docker、Docker Compose。

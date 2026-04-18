@@ -19,7 +19,6 @@ from packages.infrastructure.db.models import (
     AuditRecordRecord,
     ConnectorTaskRecord,
     DelegationCredentialRecord,
-    NotificationTaskRecord,
     PermissionRequestEventRecord,
     PermissionRequestRecord,
     SessionContextRecord,
@@ -51,7 +50,7 @@ def ensure_test_database() -> None:
         admin_engine.dispose()
 
 
-class WorkerGrantLifecycleTaskIntegrationTests(unittest.TestCase):
+class WorkerSessionRevokeTaskIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         ensure_test_database()
@@ -65,7 +64,7 @@ class WorkerGrantLifecycleTaskIntegrationTests(unittest.TestCase):
         Base.metadata.drop_all(cls.engine)
         Base.metadata.create_all(cls.engine)
         cls.celery_app = Celery(
-            "aisecurity.worker.lifecycle.test",
+            "aisecurity.worker.session_revoke.test",
             broker="memory://",
             backend="cache+memory://",
         )
@@ -80,24 +79,17 @@ class WorkerGrantLifecycleTaskIntegrationTests(unittest.TestCase):
         cls.engine.dispose()
 
     def setUp(self) -> None:
+        os.environ["FEISHU_CONNECTOR_PROVIDER"] = "stub"
         self._truncate_tables()
         self._seed_identity_data()
 
-    def test_worker_lifecycle_task_marks_expiring_and_expires_due_grants(self) -> None:
-        self._seed_active_request_and_grant(
-            request_id="req_worker_expiring_001",
-            grant_id="grt_worker_expiring_001",
-            expire_at=datetime.now(timezone.utc) + timedelta(hours=8),
-        )
-        self._seed_active_request_and_grant(
-            request_id="req_worker_expired_001",
-            grant_id="grt_worker_expired_001",
-            expire_at=datetime.now(timezone.utc) - timedelta(minutes=5),
-        )
-        self._seed_session_context(
-            request_id="req_worker_expired_001",
-            grant_id="grt_worker_expired_001",
-            global_session_id="gs_worker_expired_001",
+    def test_worker_session_revoke_task_marks_session_revoked(self) -> None:
+        os.environ["FEISHU_SESSION_REVOKE_STUB_MODE"] = "success"
+        self._seed_revoke_flow_fixture(
+            request_id="req_worker_revoke_success_001",
+            grant_id="grt_worker_revoke_success_001",
+            global_session_id="gs_worker_revoke_success_001",
+            connector_task_id="ctk_worker_revoke_success_001",
         )
 
         @contextmanager
@@ -113,75 +105,102 @@ class WorkerGrantLifecycleTaskIntegrationTests(unittest.TestCase):
             finally:
                 session.close()
 
-        lifecycle_task = self.celery_app.tasks["worker.grants.lifecycle.reconcile"]
+        task = self.celery_app.tasks["worker.sessions.revoke.process_pending"]
         with mock.patch("apps.worker.tasks.session_scope", new=session_scope_override):
-            result = lifecycle_task.run()
+            result = task.run()
 
-        self.assertEqual(result["expiring_count"], 1)
-        self.assertEqual(result["reminder_count"], 1)
-        self.assertEqual(result["expired_count"], 1)
+        self.assertEqual(result["processed_count"], 1)
+        self.assertEqual(result["revoked_count"], 1)
+        self.assertEqual(result["sync_failed_count"], 0)
 
         with self.session_factory() as session:
-            expiring_grant = session.get(AccessGrantRecord, "grt_worker_expiring_001")
-            expired_grant = session.get(AccessGrantRecord, "grt_worker_expired_001")
-            self.assertIsNotNone(expiring_grant)
-            self.assertIsNotNone(expired_grant)
-            assert expiring_grant is not None
-            assert expired_grant is not None
-            self.assertEqual(expiring_grant.grant_status, "Expiring")
-            self.assertEqual(expired_grant.grant_status, "Expired")
+            session_context = session.get(SessionContextRecord, "gs_worker_revoke_success_001")
+            grant = session.get(AccessGrantRecord, "grt_worker_revoke_success_001")
+            request_record = session.get(PermissionRequestRecord, "req_worker_revoke_success_001")
+            connector_task = session.get(ConnectorTaskRecord, "ctk_worker_revoke_success_001")
+            self.assertIsNotNone(session_context)
+            self.assertIsNotNone(grant)
+            self.assertIsNotNone(request_record)
+            self.assertIsNotNone(connector_task)
+            assert session_context is not None
+            assert grant is not None
+            assert request_record is not None
+            assert connector_task is not None
 
-            reminder_tasks = session.scalars(
-                select(NotificationTaskRecord)
-                .where(NotificationTaskRecord.grant_id == "grt_worker_expiring_001")
-            ).all()
-            self.assertEqual(len(reminder_tasks), 1)
-            self.assertEqual(reminder_tasks[0].task_status, "Succeeded")
+            self.assertEqual(session_context.session_status, "Revoked")
+            self.assertEqual(grant.grant_status, "Revoked")
+            self.assertEqual(request_record.request_status, "Revoked")
+            self.assertEqual(connector_task.task_status, "Succeeded")
 
-            expired_events = session.scalars(
+            events = session.scalars(
                 select(PermissionRequestEventRecord)
-                .where(PermissionRequestEventRecord.request_id == "req_worker_expired_001")
+                .where(PermissionRequestEventRecord.request_id == "req_worker_revoke_success_001")
                 .order_by(PermissionRequestEventRecord.created_at.asc())
             ).all()
-            self.assertEqual(
-                [event.event_type for event in expired_events],
-                ["grant.expiring", "grant.expired", "session.revoke_requested"],
-            )
+            self.assertEqual([event.event_type for event in events], ["session.revoked"])
 
-            expired_audits = session.scalars(
+    def test_worker_session_revoke_task_marks_session_sync_failed(self) -> None:
+        os.environ["FEISHU_SESSION_REVOKE_STUB_MODE"] = "failed"
+        self._seed_revoke_flow_fixture(
+            request_id="req_worker_revoke_failed_001",
+            grant_id="grt_worker_revoke_failed_001",
+            global_session_id="gs_worker_revoke_failed_001",
+            connector_task_id="ctk_worker_revoke_failed_001",
+        )
+
+        @contextmanager
+        def session_scope_override(session_factory=None):
+            del session_factory
+            session = self.session_factory()
+            try:
+                yield session
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
+            finally:
+                session.close()
+
+        task = self.celery_app.tasks["worker.sessions.revoke.process_pending"]
+        with mock.patch("apps.worker.tasks.session_scope", new=session_scope_override):
+            result = task.run()
+
+        self.assertEqual(result["processed_count"], 1)
+        self.assertEqual(result["revoked_count"], 0)
+        self.assertEqual(result["sync_failed_count"], 1)
+
+        with self.session_factory() as session:
+            session_context = session.get(SessionContextRecord, "gs_worker_revoke_failed_001")
+            grant = session.get(AccessGrantRecord, "grt_worker_revoke_failed_001")
+            request_record = session.get(PermissionRequestRecord, "req_worker_revoke_failed_001")
+            connector_task = session.get(ConnectorTaskRecord, "ctk_worker_revoke_failed_001")
+            self.assertIsNotNone(session_context)
+            self.assertIsNotNone(grant)
+            self.assertIsNotNone(request_record)
+            self.assertIsNotNone(connector_task)
+            assert session_context is not None
+            assert grant is not None
+            assert request_record is not None
+            assert connector_task is not None
+
+            self.assertEqual(session_context.session_status, "SyncFailed")
+            self.assertEqual(grant.grant_status, "RevokeFailed")
+            self.assertEqual(request_record.grant_status, "RevokeFailed")
+            self.assertEqual(request_record.current_task_state, "Failed")
+            self.assertEqual(connector_task.task_status, "Failed")
+
+            audits = session.scalars(
                 select(AuditRecordRecord)
-                .where(AuditRecordRecord.request_id == "req_worker_expired_001")
+                .where(AuditRecordRecord.request_id == "req_worker_revoke_failed_001")
                 .order_by(AuditRecordRecord.created_at.asc())
             ).all()
-            self.assertEqual(
-                [audit.event_type for audit in expired_audits],
-                ["grant.expired", "session.revoke_requested"],
-            )
-
-            expired_session = session.get(SessionContextRecord, "gs_worker_expired_001")
-            self.assertIsNotNone(expired_session)
-            assert expired_session is not None
-            self.assertEqual(expired_session.session_status, "Revoking")
-
-            revoke_tasks = session.scalars(
-                select(ConnectorTaskRecord)
-                .where(ConnectorTaskRecord.task_type == "session_revoke")
-                .where(ConnectorTaskRecord.grant_id == "grt_worker_expired_001")
-                .order_by(ConnectorTaskRecord.created_at.asc())
-            ).all()
-            self.assertEqual(len(revoke_tasks), 1)
-            self.assertEqual(revoke_tasks[0].task_status, "Pending")
-            self.assertEqual(
-                revoke_tasks[0].payload_json["global_session_id"],
-                "gs_worker_expired_001",
-            )
+            self.assertEqual([audit.event_type for audit in audits], ["session.sync_failed"])
 
     def _truncate_tables(self) -> None:
         with self.session_factory.begin() as session:
             for model in (
                 AuditRecordRecord,
                 ConnectorTaskRecord,
-                NotificationTaskRecord,
                 PermissionRequestEventRecord,
                 SessionContextRecord,
                 AccessGrantRecord,
@@ -193,7 +212,7 @@ class WorkerGrantLifecycleTaskIntegrationTests(unittest.TestCase):
                 session.execute(delete(model))
 
     def _seed_identity_data(self) -> None:
-        now = datetime(2026, 4, 17, 8, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 4, 18, 0, 0, tzinfo=timezone.utc)
         with self.session_factory.begin() as session:
             session.add(
                 UserRecord(
@@ -246,12 +265,13 @@ class WorkerGrantLifecycleTaskIntegrationTests(unittest.TestCase):
                 )
             )
 
-    def _seed_active_request_and_grant(
+    def _seed_revoke_flow_fixture(
         self,
         *,
         request_id: str,
         grant_id: str,
-        expire_at: datetime,
+        global_session_id: str,
+        connector_task_id: str,
     ) -> None:
         now = datetime.now(timezone.utc)
         with self.session_factory.begin() as session:
@@ -271,9 +291,9 @@ class WorkerGrantLifecycleTaskIntegrationTests(unittest.TestCase):
                     suggested_permission="report:sales.q3:read",
                     risk_level="Low",
                     approval_status="Approved",
-                    grant_status="Active",
+                    grant_status="Revoking",
                     request_status="Active",
-                    current_task_state="Succeeded",
+                    current_task_state="Running",
                     policy_version="perm-map.v1",
                     renew_round=0,
                     failed_reason=None,
@@ -289,27 +309,18 @@ class WorkerGrantLifecycleTaskIntegrationTests(unittest.TestCase):
                     resource_key="sales.q3_report",
                     resource_type="report",
                     action="read",
-                    grant_status="Active",
+                    grant_status="Revoking",
                     connector_status="Applied",
                     reconcile_status="Confirmed",
-                    effective_at=now - timedelta(minutes=5),
-                    expire_at=expire_at,
+                    effective_at=now - timedelta(minutes=30),
+                    expire_at=now + timedelta(days=7),
                     revoked_at=None,
-                    revocation_reason=None,
+                    revocation_reason="Manual revoke",
                     created_at=now,
                     updated_at=now,
                 )
             )
-
-    def _seed_session_context(
-        self,
-        *,
-        request_id: str,
-        grant_id: str,
-        global_session_id: str,
-    ) -> None:
-        now = datetime.now(timezone.utc)
-        with self.session_factory.begin() as session:
+            session.flush()
             session.add(
                 SessionContextRecord(
                     global_session_id=global_session_id,
@@ -319,10 +330,37 @@ class WorkerGrantLifecycleTaskIntegrationTests(unittest.TestCase):
                     user_id="user_001",
                     task_session_id="ctk_provision_001",
                     connector_session_ref="feishu_task_apply_001",
-                    session_status="Active",
-                    revocation_reason=None,
-                    last_sync_at=now - timedelta(minutes=5),
+                    session_status="Revoking",
+                    revocation_reason="Manual revoke",
+                    last_sync_at=now - timedelta(minutes=10),
                     revoked_at=None,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            session.flush()
+            session.add(
+                ConnectorTaskRecord(
+                    task_id=connector_task_id,
+                    grant_id=grant_id,
+                    request_id=request_id,
+                    task_type="session_revoke",
+                    task_status="Pending",
+                    retry_count=0,
+                    max_retry_count=3,
+                    last_error_code=None,
+                    last_error_message=None,
+                    payload_json={
+                        "global_session_id": global_session_id,
+                        "grant_id": grant_id,
+                        "request_id": request_id,
+                        "api_request_id": "req_trace_worker_session_revoke_001",
+                        "trigger_source": "Manual",
+                        "reason": "Manual revoke",
+                        "cascade_connector_sessions": True,
+                    },
+                    scheduled_at=now,
+                    processed_at=None,
                     created_at=now,
                     updated_at=now,
                 )

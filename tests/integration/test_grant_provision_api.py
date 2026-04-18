@@ -27,6 +27,7 @@ from packages.infrastructure.db.models import (
     NotificationTaskRecord,
     PermissionRequestEventRecord,
     PermissionRequestRecord,
+    SessionContextRecord,
     UserRecord,
 )
 
@@ -181,10 +182,17 @@ class GrantProvisionApiIntegrationTests(unittest.TestCase):
 
         with self.session_factory() as session:
             permission_request = session.get(PermissionRequestRecord, "req_grant_api_applied_001")
+            session_context = session.scalars(
+                select(SessionContextRecord)
+                .where(SessionContextRecord.grant_id == "grt_grant_api_applied_001")
+            ).one_or_none()
             self.assertIsNotNone(permission_request)
+            self.assertIsNotNone(session_context)
             assert permission_request is not None
+            assert session_context is not None
             self.assertEqual(permission_request.request_status, "Active")
             self.assertEqual(permission_request.grant_status, "Active")
+            self.assertEqual(session_context.session_status, "Active")
 
             audits = session.scalars(
                 select(AuditRecordRecord)
@@ -314,6 +322,7 @@ class GrantProvisionApiIntegrationTests(unittest.TestCase):
                 NotificationTaskRecord,
                 PermissionRequestEventRecord,
                 ConnectorTaskRecord,
+                SessionContextRecord,
                 AccessGrantRecord,
                 PermissionRequestRecord,
                 DelegationCredentialRecord,

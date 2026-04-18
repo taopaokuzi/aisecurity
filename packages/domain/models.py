@@ -491,6 +491,7 @@ class AccessGrant:
 @dataclass(slots=True, frozen=True, kw_only=True)
 class SessionContext:
     global_session_id: str
+    grant_id: str
     request_id: str
     agent_id: str
     user_id: str
@@ -501,6 +502,7 @@ class SessionContext:
     connector_session_ref: str | None = None
     revocation_reason: str | None = None
     last_sync_at: datetime | None = None
+    revoked_at: datetime | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -508,6 +510,7 @@ class SessionContext:
             "global_session_id",
             _require_text("global_session_id", self.global_session_id),
         )
+        object.__setattr__(self, "grant_id", _require_text("grant_id", self.grant_id))
         object.__setattr__(self, "request_id", _require_text("request_id", self.request_id))
         object.__setattr__(self, "agent_id", _require_text("agent_id", self.agent_id))
         object.__setattr__(self, "user_id", _require_text("user_id", self.user_id))
@@ -533,9 +536,14 @@ class SessionContext:
         )
         if self.last_sync_at is not None:
             _require_datetime("last_sync_at", self.last_sync_at)
+        if self.revoked_at is not None:
+            _require_datetime("revoked_at", self.revoked_at)
+            if self.session_status not in {SessionStatus.REVOKED, SessionStatus.EXPIRED}:
+                raise ValueError("revoked_at requires session_status to be Revoked or Expired")
         _require_datetime("created_at", self.created_at)
         _require_datetime("updated_at", self.updated_at)
         _validate_time_order("created_at", self.created_at, "updated_at", self.updated_at)
+        _validate_time_order("updated_at", self.updated_at, "revoked_at", self.revoked_at)
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)

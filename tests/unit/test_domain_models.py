@@ -13,6 +13,8 @@ from packages.domain import (
     GrantStatus,
     PermissionRequest,
     RequestStatus,
+    SessionContext,
+    SessionStatus,
 )
 
 
@@ -135,6 +137,37 @@ class DomainModelTests(unittest.TestCase):
         )
 
         self.assertIs(grant.connector_status, ConnectorStatus.APPLIED)
+
+    def test_session_context_coerces_status_and_keeps_grant_chain(self) -> None:
+        session_context = SessionContext(
+            global_session_id="gs_001",
+            grant_id="grt_001",
+            request_id="req_123",
+            agent_id="agent_perm_assistant_v1",
+            user_id="user_001",
+            session_status="Active",
+            task_session_id="ctk_001",
+            connector_session_ref="feishu_task_001",
+            created_at=utc_datetime(9),
+            updated_at=utc_datetime(10),
+        )
+
+        self.assertIs(session_context.session_status, SessionStatus.ACTIVE)
+        self.assertEqual(session_context.grant_id, "grt_001")
+
+    def test_session_context_requires_revoked_or_expired_when_revoked_at_exists(self) -> None:
+        with self.assertRaisesRegex(ValueError, "session_status to be Revoked or Expired"):
+            SessionContext(
+                global_session_id="gs_001",
+                grant_id="grt_001",
+                request_id="req_123",
+                agent_id="agent_perm_assistant_v1",
+                user_id="user_001",
+                session_status="SyncFailed",
+                created_at=utc_datetime(9),
+                updated_at=utc_datetime(10),
+                revoked_at=utc_datetime(11),
+            )
 
 
 if __name__ == "__main__":

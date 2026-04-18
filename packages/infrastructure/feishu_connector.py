@@ -17,6 +17,7 @@ def _utc_now() -> datetime:
 class FeishuConnectorSettings:
     provider: str = "stub"
     stub_mode: str = "accepted"
+    session_revoke_stub_mode: str = "success"
 
 
 @dataclass(slots=True, frozen=True)
@@ -45,6 +46,33 @@ class ConnectorProvisionResponse:
     raw_payload: Mapping[str, object]
 
 
+@dataclass(slots=True, frozen=True)
+class ConnectorSessionRevokeCommand:
+    global_session_id: str
+    grant_id: str
+    request_id: str
+    agent_id: str
+    user_id: str
+    reason: str
+    cascade_connector_sessions: bool
+    api_request_id: str
+    connector_session_ref: str | None = None
+    task_session_id: str | None = None
+    trace_id: str | None = None
+
+
+@dataclass(slots=True, frozen=True)
+class ConnectorSessionRevokeResponse:
+    provider_request_id: str | None
+    provider_task_id: str | None
+    connector_session_ref: str | None
+    revoked_at: datetime | None
+    retryable: bool
+    error_code: str | None
+    error_message: str | None
+    raw_payload: Mapping[str, object]
+
+
 class ConnectorUnavailableError(RuntimeError):
     pass
 
@@ -54,6 +82,13 @@ class FeishuPermissionConnector(Protocol):
         self,
         command: ConnectorProvisionCommand,
     ) -> ConnectorProvisionResponse: ...
+
+
+class FeishuSessionConnector(Protocol):
+    def revoke_session(
+        self,
+        command: ConnectorSessionRevokeCommand,
+    ) -> ConnectorSessionRevokeResponse: ...
 
 
 class StubFeishuPermissionConnector:
@@ -146,11 +181,64 @@ class StubFeishuPermissionConnector:
             )
         raise ConnectorUnavailableError(f"Unsupported feishu connector stub mode: {self.mode}")
 
+    def revoke_session(
+        self,
+        command: ConnectorSessionRevokeCommand,
+    ) -> ConnectorSessionRevokeResponse:
+        current_time = self.now_provider().astimezone(timezone.utc)
+        provider_request_id = f"feishu_req_{uuid4().hex[:16]}"
+        provider_task_id = f"feishu_task_{uuid4().hex[:16]}"
+        settings = load_feishu_connector_settings()
+        revoke_mode = settings.session_revoke_stub_mode
+        raw_payload = {
+            "provider": "stub",
+            "mode": revoke_mode,
+            "global_session_id": command.global_session_id,
+            "grant_id": command.grant_id,
+            "request_id": command.request_id,
+            "agent_id": command.agent_id,
+            "user_id": command.user_id,
+            "reason": command.reason,
+            "cascade_connector_sessions": command.cascade_connector_sessions,
+            "connector_session_ref": command.connector_session_ref,
+            "task_session_id": command.task_session_id,
+            "api_request_id": command.api_request_id,
+            "trace_id": command.trace_id,
+        }
+        if revoke_mode == "success":
+            return ConnectorSessionRevokeResponse(
+                provider_request_id=provider_request_id,
+                provider_task_id=provider_task_id,
+                connector_session_ref=command.connector_session_ref,
+                revoked_at=current_time,
+                retryable=False,
+                error_code=None,
+                error_message=None,
+                raw_payload=raw_payload,
+            )
+        if revoke_mode == "failed":
+            return ConnectorSessionRevokeResponse(
+                provider_request_id=provider_request_id,
+                provider_task_id=provider_task_id,
+                connector_session_ref=command.connector_session_ref,
+                revoked_at=None,
+                retryable=True,
+                error_code="FEISHU_SESSION_REVOKE_FAILED",
+                error_message="Feishu connector failed to revoke the connector session",
+                raw_payload=raw_payload,
+            )
+        raise ConnectorUnavailableError(
+            f"Unsupported feishu session revoke stub mode: {revoke_mode}"
+        )
+
 
 def load_feishu_connector_settings() -> FeishuConnectorSettings:
     return FeishuConnectorSettings(
         provider=os.getenv("FEISHU_CONNECTOR_PROVIDER", "stub").strip().lower() or "stub",
         stub_mode=os.getenv("FEISHU_CONNECTOR_STUB_MODE", "accepted").strip().lower() or "accepted",
+        session_revoke_stub_mode=(
+            os.getenv("FEISHU_SESSION_REVOKE_STUB_MODE", "success").strip().lower() or "success"
+        ),
     )
 
 
@@ -158,6 +246,18 @@ def create_feishu_permission_connector(
     *,
     now_provider: Callable[[], datetime] = _utc_now,
 ) -> FeishuPermissionConnector:
+    settings = load_feishu_connector_settings()
+    if settings.provider == "stub":
+        return StubFeishuPermissionConnector(mode=settings.stub_mode, now_provider=now_provider)
+    raise ConnectorUnavailableError(
+        f"Unsupported feishu connector provider: {settings.provider}"
+    )
+
+
+def create_feishu_session_connector(
+    *,
+    now_provider: Callable[[], datetime] = _utc_now,
+) -> FeishuSessionConnector:
     settings = load_feishu_connector_settings()
     if settings.provider == "stub":
         return StubFeishuPermissionConnector(mode=settings.stub_mode, now_provider=now_provider)

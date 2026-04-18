@@ -12,6 +12,7 @@ from packages.infrastructure.db.models import (
     NotificationTaskRecord,
     PermissionRequestEventRecord,
     PermissionRequestRecord,
+    SessionContextRecord,
 )
 
 from .base import SqlAlchemyRepository
@@ -215,6 +216,41 @@ class ConnectorTaskRepository(SqlAlchemyRepository[ConnectorTaskRecord]):
         )
         return self.scalars(statement)
 
+    def get_latest_session_revoke_for_session(
+        self,
+        *,
+        global_session_id: str,
+    ) -> ConnectorTaskRecord | None:
+        statement = (
+            select(ConnectorTaskRecord)
+            .where(ConnectorTaskRecord.task_type == "session_revoke")
+            .where(ConnectorTaskRecord.payload_json.contains({"global_session_id": global_session_id}))
+            .order_by(ConnectorTaskRecord.created_at.desc())
+        )
+        return self.session.scalar(statement)
+
+    def list_pending_session_revoke_tasks(
+        self,
+        *,
+        limit: int | None = 100,
+    ) -> list[ConnectorTaskRecord]:
+        statement = (
+            select(ConnectorTaskRecord)
+            .where(ConnectorTaskRecord.task_type == "session_revoke")
+            .where(
+                ConnectorTaskRecord.task_status.in_(
+                    [
+                        "Pending",
+                        "Retrying",
+                    ]
+                )
+            )
+            .order_by(ConnectorTaskRecord.scheduled_at.asc(), ConnectorTaskRecord.created_at.asc())
+        )
+        if limit is not None:
+            statement = statement.limit(limit)
+        return self.scalars(statement)
+
 
 class NotificationTaskRepository(SqlAlchemyRepository[NotificationTaskRecord]):
     model = NotificationTaskRecord
@@ -284,6 +320,47 @@ class AuditRecordRepository(SqlAlchemyRepository[AuditRecordRecord]):
             .where(AuditRecordRecord.actor_type == actor_type)
             .where(AuditRecordRecord.actor_id == actor_id)
             .order_by(AuditRecordRecord.created_at.desc())
+        )
+        if limit is not None:
+            statement = statement.limit(limit)
+        return self.scalars(statement)
+
+
+class SessionContextRepository(SqlAlchemyRepository[SessionContextRecord]):
+    model = SessionContextRecord
+
+    def get_by_grant_id(self, grant_id: str) -> SessionContextRecord | None:
+        statement = select(SessionContextRecord).where(SessionContextRecord.grant_id == grant_id)
+        return self.session.scalar(statement)
+
+    def list_for_agent(
+        self,
+        agent_id: str,
+        *,
+        statuses: list[str] | tuple[str, ...] | None = None,
+        limit: int | None = 100,
+    ) -> list[SessionContextRecord]:
+        statement = (
+            select(SessionContextRecord)
+            .where(SessionContextRecord.agent_id == agent_id)
+            .order_by(SessionContextRecord.updated_at.desc())
+        )
+        if statuses:
+            statement = statement.where(SessionContextRecord.session_status.in_(statuses))
+        if limit is not None:
+            statement = statement.limit(limit)
+        return self.scalars(statement)
+
+    def list_for_statuses(
+        self,
+        statuses: list[str] | tuple[str, ...],
+        *,
+        limit: int | None = 100,
+    ) -> list[SessionContextRecord]:
+        statement = (
+            select(SessionContextRecord)
+            .where(SessionContextRecord.session_status.in_(statuses))
+            .order_by(SessionContextRecord.updated_at.asc())
         )
         if limit is not None:
             statement = statement.limit(limit)

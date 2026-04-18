@@ -14,16 +14,20 @@ from packages.application import (
     GrantRenewInput,
     GrantRenewResult,
     ProvisioningService,
+    SessionAuthority,
 )
 from packages.domain import DomainError, ErrorCode, OperatorType
 from packages.infrastructure import (
     AccessGrantRepository,
+    AgentIdentityRepository,
     AuditRecordRepository,
     ConnectorTaskRepository,
     NotificationTaskRepository,
     PermissionRequestEventRepository,
     PermissionRequestRepository,
+    SessionContextRepository,
     create_feishu_permission_connector,
+    create_feishu_session_connector,
 )
 
 from .dependencies import ApiRequestContext, get_db_session, get_request_context
@@ -77,6 +81,16 @@ class GrantRenewResponse(BaseModel):
 
 
 def build_provisioning_service(session: Session) -> ProvisioningService:
+    session_authority = SessionAuthority(
+        permission_request_repository=PermissionRequestRepository(session),
+        access_grant_repository=AccessGrantRepository(session),
+        session_context_repository=SessionContextRepository(session),
+        permission_request_event_repository=PermissionRequestEventRepository(session),
+        audit_repository=AuditRecordRepository(session),
+        connector_task_repository=ConnectorTaskRepository(session),
+        agent_identity_repository=AgentIdentityRepository(session),
+        connector=create_feishu_session_connector(),
+    )
     return ProvisioningService(
         permission_request_repository=PermissionRequestRepository(session),
         access_grant_repository=AccessGrantRepository(session),
@@ -84,16 +98,28 @@ def build_provisioning_service(session: Session) -> ProvisioningService:
         permission_request_event_repository=PermissionRequestEventRepository(session),
         audit_repository=AuditRecordRepository(session),
         connector=create_feishu_permission_connector(),
+        session_authority=session_authority,
     )
 
 
 def build_grant_lifecycle_service(session: Session) -> GrantLifecycleService:
+    session_authority = SessionAuthority(
+        permission_request_repository=PermissionRequestRepository(session),
+        access_grant_repository=AccessGrantRepository(session),
+        session_context_repository=SessionContextRepository(session),
+        permission_request_event_repository=PermissionRequestEventRepository(session),
+        audit_repository=AuditRecordRepository(session),
+        connector_task_repository=ConnectorTaskRepository(session),
+        agent_identity_repository=AgentIdentityRepository(session),
+        connector=create_feishu_session_connector(),
+    )
     return GrantLifecycleService(
         permission_request_repository=PermissionRequestRepository(session),
         access_grant_repository=AccessGrantRepository(session),
         permission_request_event_repository=PermissionRequestEventRepository(session),
         audit_repository=AuditRecordRepository(session),
         notification_task_repository=NotificationTaskRepository(session),
+        session_authority=session_authority,
     )
 
 

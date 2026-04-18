@@ -27,6 +27,7 @@ from packages.infrastructure.db.models import (
     NotificationTaskRecord,
     PermissionRequestEventRecord,
     PermissionRequestRecord,
+    SessionContextRecord,
     UserRecord,
 )
 
@@ -238,6 +239,7 @@ class GrantRenewApiIntegrationTests(unittest.TestCase):
                 AuditRecordRecord,
                 NotificationTaskRecord,
                 PermissionRequestEventRecord,
+                SessionContextRecord,
                 AccessGrantRecord,
                 ApprovalRecordRecord,
                 PermissionRequestRecord,

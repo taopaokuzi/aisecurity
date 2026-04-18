@@ -4,16 +4,19 @@ from datetime import datetime, timezone
 
 from celery import Celery
 
-from packages.application import GrantLifecycleService, GrantProvisionInput, ProvisioningService
+from packages.application import GrantLifecycleService, GrantProvisionInput, ProvisioningService, SessionAuthority
 from packages.domain import DomainError, ErrorCode, OperatorType
 from packages.infrastructure import (
     AccessGrantRepository,
+    AgentIdentityRepository,
     AuditRecordRepository,
     ConnectorTaskRepository,
     NotificationTaskRepository,
     PermissionRequestEventRepository,
     PermissionRequestRepository,
+    SessionContextRepository,
     create_feishu_permission_connector,
+    create_feishu_session_connector,
     session_scope,
 )
 
@@ -22,6 +25,7 @@ REGISTERED_TASKS = (
     "worker.runtime_summary",
     "worker.grants.provision",
     "worker.grants.lifecycle.reconcile",
+    "worker.sessions.revoke.process_pending",
 )
 
 
@@ -67,6 +71,16 @@ def register_tasks(celery_app: Celery) -> None:
             trace_id: str | None = None,
         ) -> dict[str, object]:
             with session_scope() as session:
+                session_authority = SessionAuthority(
+                    permission_request_repository=PermissionRequestRepository(session),
+                    access_grant_repository=AccessGrantRepository(session),
+                    session_context_repository=SessionContextRepository(session),
+                    permission_request_event_repository=PermissionRequestEventRepository(session),
+                    audit_repository=AuditRecordRepository(session),
+                    connector_task_repository=ConnectorTaskRepository(session),
+                    agent_identity_repository=AgentIdentityRepository(session),
+                    connector=create_feishu_session_connector(),
+                )
                 service = ProvisioningService(
                     permission_request_repository=PermissionRequestRepository(session),
                     access_grant_repository=AccessGrantRepository(session),
@@ -74,6 +88,7 @@ def register_tasks(celery_app: Celery) -> None:
                     permission_request_event_repository=PermissionRequestEventRepository(session),
                     audit_repository=AuditRecordRepository(session),
                     connector=create_feishu_permission_connector(),
+                    session_authority=session_authority,
                 )
                 try:
                     result = service.provision_grant(
@@ -119,12 +134,23 @@ def register_tasks(celery_app: Celery) -> None:
         @celery_app.task(name="worker.grants.lifecycle.reconcile")
         def reconcile_grant_lifecycle() -> dict[str, int]:
             with session_scope() as session:
+                session_authority = SessionAuthority(
+                    permission_request_repository=PermissionRequestRepository(session),
+                    access_grant_repository=AccessGrantRepository(session),
+                    session_context_repository=SessionContextRepository(session),
+                    permission_request_event_repository=PermissionRequestEventRepository(session),
+                    audit_repository=AuditRecordRepository(session),
+                    connector_task_repository=ConnectorTaskRepository(session),
+                    agent_identity_repository=AgentIdentityRepository(session),
+                    connector=create_feishu_session_connector(),
+                )
                 service = GrantLifecycleService(
                     permission_request_repository=PermissionRequestRepository(session),
                     access_grant_repository=AccessGrantRepository(session),
                     permission_request_event_repository=PermissionRequestEventRepository(session),
                     audit_repository=AuditRecordRepository(session),
                     notification_task_repository=NotificationTaskRepository(session),
+                    session_authority=session_authority,
                 )
                 result = service.process_grant_lifecycle()
                 session.commit()
@@ -132,4 +158,27 @@ def register_tasks(celery_app: Celery) -> None:
                     "expiring_count": result.expiring_count,
                     "reminder_count": result.reminder_count,
                     "expired_count": result.expired_count,
+                }
+
+    if "worker.sessions.revoke.process_pending" not in celery_app.tasks:
+
+        @celery_app.task(name="worker.sessions.revoke.process_pending")
+        def process_pending_session_revokes(*, limit: int | None = 100) -> dict[str, int]:
+            with session_scope() as session:
+                service = SessionAuthority(
+                    permission_request_repository=PermissionRequestRepository(session),
+                    access_grant_repository=AccessGrantRepository(session),
+                    session_context_repository=SessionContextRepository(session),
+                    permission_request_event_repository=PermissionRequestEventRepository(session),
+                    audit_repository=AuditRecordRepository(session),
+                    connector_task_repository=ConnectorTaskRepository(session),
+                    agent_identity_repository=AgentIdentityRepository(session),
+                    connector=create_feishu_session_connector(),
+                )
+                result = service.process_pending_revoke_tasks(limit=limit)
+                session.commit()
+                return {
+                    "processed_count": result.processed_count,
+                    "revoked_count": result.revoked_count,
+                    "sync_failed_count": result.sync_failed_count,
                 }

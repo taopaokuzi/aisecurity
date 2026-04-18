@@ -33,6 +33,18 @@ from .grant_lifecycle import (
     GrantRenewResult,
     GrantRenewalCompletionResult,
 )
+from .session_authority import (
+    AgentDisableInput,
+    AgentDisableResult,
+    SessionAuthority,
+    SessionBindingInput,
+    SessionBindingResult,
+    SessionRevokeBatchResult,
+    SessionRevokeInput,
+    SessionRevokeProcessResult,
+    SessionRevokeRequestedResult,
+    SessionStatusResult,
+)
 
 __all__ = [
     "ApprovalCallbackInput",
@@ -57,6 +69,16 @@ __all__ = [
     "GrantRenewInput",
     "GrantRenewResult",
     "GrantRenewalCompletionResult",
+    "AgentDisableInput",
+    "AgentDisableResult",
     "ProvisioningService",
+    "SessionAuthority",
+    "SessionBindingInput",
+    "SessionBindingResult",
+    "SessionRevokeBatchResult",
+    "SessionRevokeInput",
+    "SessionRevokeProcessResult",
+    "SessionRevokeRequestedResult",
+    "SessionStatusResult",
     "default_grant_id_for_request",
 ]
