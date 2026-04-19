@@ -9,6 +9,35 @@ Agent Identity & Permission 系统的单仓项目骨架。
 - [技术设计](docs/agent-identity-permission-technical-design.md)
 - [开发指南](docs/agent-identity-permission-development-guide.md)
 
+## 项目中的 AI 技术方案
+
+本项目是一个“Agent 身份与权限治理系统”，AI 主要用于把员工的自然语言权限需求转化为结构化申请，并辅助完成最小权限建议、风险识别和审批路径推荐。系统不是让 AI 直接决定是否授权，而是采用“AI 解析 + 策略规则引擎 + 审批/审计闭环”的方式，保证安全可控。
+
+### 借助的 AI 工具 / 平台 / 模型 / 技术手段
+
+- 使用 OpenAI-compatible LLM Gateway 设计，支持接入兼容 OpenAI Chat Completions 协议的大模型服务
+- 默认配置中预留模型为 `gpt-4.1-mini`，本地开发环境可使用 stub / heuristic fallback，避免依赖外部模型也能完成演示
+- 使用 Prompt 模板管理自然语言解析任务，例如将“我需要查看销售部 Q3 报表”解析为 `resource_type`、`resource_key`、`action`、`requested_duration`、`constraints` 等结构化字段
+- 使用启发式解析器作为兜底能力，当 LLM 不可用或输出异常时，系统仍能根据关键词、部门、资源类型、动作类型进行基础识别
+- 使用策略规则引擎进行权限映射、风险评分和审批链推荐，规则优先于 LLM，避免大模型幻觉直接影响授权结果
+- 开发过程中也借助 AI 编程助手进行需求拆解、任务规划、代码生成、测试补齐、验收提示词设计和问题定位，提高研发效率
+
+### AI 如何提升效率或创造价值
+
+- 降低权限申请门槛：员工不用理解复杂权限字段，只需要用自然语言描述需求，系统自动解析成标准申请单
+- 提升处理效率：低风险、同部门、只读类申请可以快速识别并进入简化流程，减少人工反复沟通
+- 提升安全性：AI 先帮助识别资源、动作、部门和敏感度，再由规则引擎判断是否高风险、是否跨部门、是否需要安全管理员审批
+- 提升可审计性：AI 解析结果、风险等级、策略版本、审批链和最终状态都会落库，方便管理员追踪每一次授权原因
+- 提升研发效率：通过 AI 辅助拆分 19 个开发任务、生成开发/验收提示词、定位失败原因和补充测试，让项目从文档设计到可运行 Demo 更快闭环
+
+### AI 在项目中扮演的角色
+
+AI 在本项目中扮演的是“权限申请理解助手”和“Agent 治理对象”两个角色。
+
+一方面，AI 负责理解用户自然语言申请，把模糊需求转成系统可处理的结构化权限请求；另一方面，系统也把 Agent 本身纳入身份治理，要求 Agent 必须有身份、委托凭证、会话状态和审计记录，不能越权替用户申请或使用权限。
+
+最终授权决策不是由 AI 单独完成，而是由策略规则、风险分级、审批流程和审计机制共同完成。这样既利用 AI 提升体验和效率，又保留企业权限治理所需的确定性、安全性和可追责性。
+
 ## 目录约定
 
 - `compose.yaml`：本地统一编排入口
@@ -16,6 +45,25 @@ Agent Identity & Permission 系统的单仓项目骨架。
 - `.env.example`：环境变量样例
 - `docker/`：本地开发镜像与依赖安装定义
 - `migrations/`、`alembic.ini`：Alembic 初始化配置
+
+## Task 1
+
+Task 1 完成了仓库脚手架与目录骨架：
+
+- 新增单仓基础目录：`apps/api`、`apps/worker`、`apps/web`、`packages/domain`、`packages/application`、`packages/infrastructure`、`packages/policy`、`packages/prompts`、`packages/audit`、`migrations`、`tests/unit`、`tests/integration`、`tests/e2e`、`docker`
+- 新增基础工程文件：`.gitignore`、`pyproject.toml`、根目录 `package.json`、`apps/web/package.json`，并为核心目录补充占位文件
+- 完成基础配置文件解析检查，确认仓库骨架可以被后续 Python、Web、迁移和测试任务复用
+- 在任务总表中把 `TASK-001` 标记为 `DONE / PASS`
+
+## Task 2
+
+Task 2 完成了运行时入口与健康检查：
+
+- 在 `apps/api/main.py` 中新增 FastAPI 应用入口，并提供 `GET /health` 健康检查
+- 在 `apps/worker/celery_app.py`、`apps/worker/__main__.py` 和 worker healthcheck 中新增最小可运行的 Worker 入口
+- 在 `apps/web/app/page.js`、`apps/web/app/layout.js` 中新增 Next.js Web 入口，并提供 `GET /api/health` 健康检查
+- 验证 API、Worker、Web 均可启动，API/Web 健康检查、Web build 和 lint 通过
+- 在任务总表中把 `TASK-002` 标记为 `DONE / PASS`
 
 ## Task 3
 
