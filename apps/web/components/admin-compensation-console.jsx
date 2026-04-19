@@ -12,46 +12,23 @@ import {
 import { StatusPill } from "./status-pill";
 import styles from "./employee-request-ui.module.css";
 
-const STORAGE_KEY = "aisecurity.admin_console_context";
+const DEFAULT_AUTH_CONTEXT = {
+  userId: "it_admin_001",
+  operatorType: "ITAdmin",
+  source: "dev_stub",
+};
 
-function readAdminContext() {
-  if (typeof window === "undefined") {
-    return { userId: "", operatorType: "ITAdmin" };
+function getContextDescription(authContext) {
+  if (authContext.source === "dev_stub") {
+    return "补偿操作由 Web 服务端受控的开发 stub 管理员身份发起，页面不会透传任意输入身份。";
   }
-
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "{}");
-    return {
-      userId: parsed.userId ?? "",
-      operatorType: parsed.operatorType ?? "ITAdmin",
-    };
-  } catch {
-    return { userId: "", operatorType: "ITAdmin" };
-  }
+  return "补偿操作由服务端会话或统一身份注入层提供的管理员身份发起。";
 }
 
-function persistAdminContext(nextContext) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    const current = readAdminContext();
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        ...current,
-        ...nextContext,
-      })
-    );
-  } catch {
-    // Ignore storage failures and keep the UI interactive.
-  }
-}
-
-export function AdminCompensationConsole({ apiClient = adminBrowserClient }) {
-  const [userId, setUserId] = useState("");
-  const [operatorType, setOperatorType] = useState("ITAdmin");
+export function AdminCompensationConsole({
+  apiClient = adminBrowserClient,
+  authContext = DEFAULT_AUTH_CONTEXT,
+}) {
   const [requestId, setRequestId] = useState("");
   const [grantId, setGrantId] = useState("");
   const [loading, setLoading] = useState(false);
@@ -61,20 +38,12 @@ export function AdminCompensationConsole({ apiClient = adminBrowserClient }) {
   const [items, setItems] = useState([]);
   const [reasonByTaskId, setReasonByTaskId] = useState({});
 
-  async function loadFailedTasks(nextUserId = userId, nextOperatorType = operatorType) {
-    if (!nextUserId.trim()) {
-      setError("请先填写管理员 user_id，再查询可补偿任务。");
-      setItems([]);
-      return;
-    }
-
+  async function loadFailedTasks() {
     setLoading(true);
     setError("");
 
     try {
       const payload = await apiClient.listFailedTasks({
-        userId: nextUserId.trim(),
-        operatorType: nextOperatorType,
         requestId,
         grantId,
         page: "1",
@@ -90,20 +59,11 @@ export function AdminCompensationConsole({ apiClient = adminBrowserClient }) {
   }
 
   useEffect(() => {
-    const context = readAdminContext();
-    setUserId(context.userId);
-    setOperatorType(context.operatorType);
-    if (!context.userId) {
-      return;
-    }
-
     let cancelled = false;
 
     async function loadInitialFailedTasks() {
       try {
         const payload = await apiClient.listFailedTasks({
-          userId: context.userId,
-          operatorType: context.operatorType,
           requestId: "",
           grantId: "",
           page: "1",
@@ -134,9 +94,9 @@ export function AdminCompensationConsole({ apiClient = adminBrowserClient }) {
   }, [apiClient]);
 
   async function handleRetry(task) {
-    const canRetry = task.retryable && operatorType === "ITAdmin";
+    const canRetry = task.retryable && authContext.operatorType === "ITAdmin";
     if (!canRetry) {
-      setError(getCompensationHint(task, operatorType));
+      setError(getCompensationHint(task, authContext.operatorType));
       setResultMessage("");
       return;
     }
@@ -161,8 +121,6 @@ export function AdminCompensationConsole({ apiClient = adminBrowserClient }) {
     try {
       const payload = await apiClient.retryConnectorTask({
         taskId: task.task_id,
-        userId: userId.trim(),
-        operatorType,
         reason,
       });
       setResultMessage(
@@ -178,6 +136,14 @@ export function AdminCompensationConsole({ apiClient = adminBrowserClient }) {
 
   return (
     <section className={styles.tableCard}>
+      <div className={styles.callout}>
+        <p className={styles.calloutTitle}>当前管理上下文</p>
+        <p className={styles.calloutText}>
+          当前以 <code>{authContext.userId}</code> / <code>{authContext.operatorType}</code> 执行补偿。
+          {getContextDescription(authContext)}
+        </p>
+      </div>
+
       <div className={styles.listHeader}>
         <div>
           <h2 className={styles.sectionTitle}>补偿 / Retry 操作</h2>
@@ -194,32 +160,16 @@ export function AdminCompensationConsole({ apiClient = adminBrowserClient }) {
       </div>
 
       <div className={styles.fieldGrid}>
-        <label className={styles.fieldLabel}>
-          <span>管理员 user_id</span>
-          <input
-            className={styles.input}
-            value={userId}
-            onChange={(event) => {
-              setUserId(event.target.value);
-              persistAdminContext({ userId: event.target.value });
-            }}
-            placeholder="例如 it_admin_001"
-          />
-        </label>
-        <label className={styles.fieldLabel}>
-          <span>操作人类型</span>
-          <select
-            className={styles.select}
-            value={operatorType}
-            onChange={(event) => {
-              setOperatorType(event.target.value);
-              persistAdminContext({ operatorType: event.target.value });
-            }}
-          >
-            <option value="ITAdmin">ITAdmin</option>
-            <option value="SecurityAdmin">SecurityAdmin</option>
-          </select>
-        </label>
+        <div className={styles.detailItem}>
+          <span className={styles.detailTerm}>管理员 user_id</span>
+          <p className={`${styles.detailValue} ${styles.codeValue}`}>{authContext.userId}</p>
+        </div>
+        <div className={styles.detailItem}>
+          <span className={styles.detailTerm}>操作人类型</span>
+          <p className={`${styles.detailValue} ${styles.codeValue}`}>
+            {authContext.operatorType}
+          </p>
+        </div>
         <label className={styles.fieldLabel}>
           <span>request_id</span>
           <input
@@ -264,14 +214,14 @@ export function AdminCompensationConsole({ apiClient = adminBrowserClient }) {
       {!error && !items.length ? (
         <div className={styles.emptyState}>
           <p className={styles.calloutTitle}>暂无可展示任务</p>
-          <p className={styles.calloutText}>先填写管理员上下文，再加载失败任务并执行补偿。</p>
+          <p className={styles.calloutText}>先加载失败任务，再根据状态与错误信息决定是否补偿。</p>
         </div>
       ) : null}
 
       {items.length ? (
         <div className={styles.requestList}>
           {items.map((item) => {
-            const canRetry = item.retryable && operatorType === "ITAdmin";
+            const canRetry = item.retryable && authContext.operatorType === "ITAdmin";
 
             return (
               <article className={styles.requestRow} key={item.task_id}>
@@ -295,7 +245,9 @@ export function AdminCompensationConsole({ apiClient = adminBrowserClient }) {
                   </div>
                   <p className={styles.requestSnippet}>当前状态：{formatValue(item.task_status)}</p>
                   <p className={styles.requestSnippet}>最近错误：{getFailureSummary(item)}</p>
-                  <p className={styles.requestSnippet}>{getCompensationHint(item, operatorType)}</p>
+                  <p className={styles.requestSnippet}>
+                    {getCompensationHint(item, authContext.operatorType)}
+                  </p>
                   <label className={styles.fieldLabel}>
                     <span>retry reason</span>
                     <input

@@ -5,11 +5,6 @@ import { EmployeeRequestList } from "./employee-request-list";
 
 describe("EmployeeRequestList", () => {
   it("loads and renders the employee request list", async () => {
-    window.localStorage.setItem(
-      "aisecurity.employee_request_context",
-      JSON.stringify({ userId: "user_001" })
-    );
-
     const apiClient = {
       listPermissionRequests: vi.fn().mockResolvedValue({
         data: {
@@ -29,12 +24,24 @@ describe("EmployeeRequestList", () => {
       }),
     };
 
-    render(<EmployeeRequestList apiClient={apiClient} />);
+    render(
+      <EmployeeRequestList
+        apiClient={apiClient}
+        authContext={{ userId: "user_001", operatorType: "User", source: "dev_stub" }}
+      />
+    );
 
     await waitFor(() => {
-      expect(apiClient.listPermissionRequests).toHaveBeenCalled();
+      expect(apiClient.listPermissionRequests).toHaveBeenCalledWith(
+        expect.not.objectContaining({
+          userId: expect.any(String),
+        })
+      );
     });
 
+    expect(screen.getAllByText("user_001")).not.toHaveLength(0);
+    expect(screen.getByText(/不会再通过手工输入 user_id/)).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "员工 user_id" })).not.toBeInTheDocument();
     expect(await screen.findByText("req_001")).toBeInTheDocument();
     expect(screen.getByText("我需要查看销售部 Q3 报表")).toBeInTheDocument();
     expect(screen.getByText("待审批")).toBeInTheDocument();

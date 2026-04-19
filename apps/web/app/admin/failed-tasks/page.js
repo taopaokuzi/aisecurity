@@ -1,8 +1,10 @@
 import { AdminFailedTaskConsole } from "../../../components/admin-failed-task-console";
 import { AdminShell } from "../../../components/admin-shell";
 import styles from "../../../components/employee-request-ui.module.css";
+import { getAdminSessionContext } from "../../../lib/web-auth-context";
 
 export default function AdminFailedTasksPage() {
+  const authContext = getAdminSessionContext();
   return (
     <AdminShell
       eyebrow="Failed Tasks"
@@ -20,7 +22,7 @@ export default function AdminFailedTasksPage() {
         </>
       }
     >
-      <AdminFailedTaskConsole />
+      <AdminFailedTaskConsole authContext={authContext} />
     </AdminShell>
   );
 }

@@ -6,47 +6,24 @@ import { adminBrowserClient, getAdminErrorMessage } from "../lib/admin-browser-c
 import { formatDateTime, formatValue } from "../lib/admin-presenters";
 import styles from "./employee-request-ui.module.css";
 
-const STORAGE_KEY = "aisecurity.admin_console_context";
 const PAGE_SIZE = 10;
+const DEFAULT_AUTH_CONTEXT = {
+  userId: "security_admin_001",
+  operatorType: "SecurityAdmin",
+  source: "dev_stub",
+};
 
-function readAdminContext() {
-  if (typeof window === "undefined") {
-    return { userId: "", operatorType: "SecurityAdmin" };
+function getContextDescription(authContext) {
+  if (authContext.source === "dev_stub") {
+    return "当前页面使用 Web 服务端受控的开发 stub 身份访问后台，页面输入不会决定真实管理员身份。";
   }
-
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "{}");
-    return {
-      userId: parsed.userId ?? "",
-      operatorType: parsed.operatorType ?? "SecurityAdmin",
-    };
-  } catch {
-    return { userId: "", operatorType: "SecurityAdmin" };
-  }
+  return "当前页面使用服务端会话或统一身份注入层提供的管理员身份访问后台。";
 }
 
-function persistAdminContext(nextContext) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    const current = readAdminContext();
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        ...current,
-        ...nextContext,
-      })
-    );
-  } catch {
-    // Ignore storage failures and keep the UI interactive.
-  }
-}
-
-export function AdminAuditConsole({ apiClient = adminBrowserClient }) {
-  const [userId, setUserId] = useState("");
-  const [operatorType, setOperatorType] = useState("SecurityAdmin");
+export function AdminAuditConsole({
+  apiClient = adminBrowserClient,
+  authContext = DEFAULT_AUTH_CONTEXT,
+}) {
   const [requestId, setRequestId] = useState("");
   const [eventType, setEventType] = useState("");
   const [loading, setLoading] = useState(false);
@@ -55,21 +32,12 @@ export function AdminAuditConsole({ apiClient = adminBrowserClient }) {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
 
-  async function loadAuditRecords(nextPage = 1, nextUserId = userId, nextOperatorType = operatorType) {
-    if (!nextUserId.trim()) {
-      setError("请先填写管理员 user_id，再查询审计记录。");
-      setItems([]);
-      setTotal(0);
-      return;
-    }
-
+  async function loadAuditRecords(nextPage = 1) {
     setLoading(true);
     setError("");
 
     try {
       const payload = await apiClient.listAuditRecords({
-        userId: nextUserId.trim(),
-        operatorType: nextOperatorType,
         requestId: requestId.trim(),
         eventType: eventType.trim(),
         page: String(nextPage),
@@ -88,20 +56,11 @@ export function AdminAuditConsole({ apiClient = adminBrowserClient }) {
   }
 
   useEffect(() => {
-    const context = readAdminContext();
-    setUserId(context.userId);
-    setOperatorType(context.operatorType);
-    if (!context.userId) {
-      return;
-    }
-
     let cancelled = false;
 
     async function loadInitialAuditRecords() {
       try {
         const payload = await apiClient.listAuditRecords({
-          userId: context.userId,
-          operatorType: context.operatorType,
           requestId: "",
           eventType: "",
           page: "1",
@@ -138,6 +97,14 @@ export function AdminAuditConsole({ apiClient = adminBrowserClient }) {
 
   return (
     <section className={styles.tableCard}>
+      <div className={styles.callout}>
+        <p className={styles.calloutTitle}>当前管理上下文</p>
+        <p className={styles.calloutText}>
+          当前以 <code>{authContext.userId}</code> / <code>{authContext.operatorType}</code> 执行查询。
+          {getContextDescription(authContext)}
+        </p>
+      </div>
+
       <div className={styles.listHeader}>
         <div>
           <h2 className={styles.sectionTitle}>审计记录查询</h2>
@@ -156,32 +123,16 @@ export function AdminAuditConsole({ apiClient = adminBrowserClient }) {
       </div>
 
       <div className={styles.fieldGrid}>
-        <label className={styles.fieldLabel}>
-          <span>管理员 user_id</span>
-          <input
-            className={styles.input}
-            value={userId}
-            onChange={(event) => {
-              setUserId(event.target.value);
-              persistAdminContext({ userId: event.target.value });
-            }}
-            placeholder="例如 it_admin_001"
-          />
-        </label>
-        <label className={styles.fieldLabel}>
-          <span>操作人类型</span>
-          <select
-            className={styles.select}
-            value={operatorType}
-            onChange={(event) => {
-              setOperatorType(event.target.value);
-              persistAdminContext({ operatorType: event.target.value });
-            }}
-          >
-            <option value="SecurityAdmin">SecurityAdmin</option>
-            <option value="ITAdmin">ITAdmin</option>
-          </select>
-        </label>
+        <div className={styles.detailItem}>
+          <span className={styles.detailTerm}>管理员 user_id</span>
+          <p className={`${styles.detailValue} ${styles.codeValue}`}>{authContext.userId}</p>
+        </div>
+        <div className={styles.detailItem}>
+          <span className={styles.detailTerm}>操作人类型</span>
+          <p className={`${styles.detailValue} ${styles.codeValue}`}>
+            {authContext.operatorType}
+          </p>
+        </div>
         <label className={styles.fieldLabel}>
           <span>request_id</span>
           <input
@@ -212,7 +163,7 @@ export function AdminAuditConsole({ apiClient = adminBrowserClient }) {
       {!error && !items.length ? (
         <div className={styles.emptyState}>
           <p className={styles.calloutTitle}>暂无审计记录</p>
-          <p className={styles.calloutText}>填写管理员上下文后即可按条件检索审计链路。</p>
+          <p className={styles.calloutText}>可以直接按条件检索审计链路，无需在页面手工填写管理员身份。</p>
         </div>
       ) : null}
 

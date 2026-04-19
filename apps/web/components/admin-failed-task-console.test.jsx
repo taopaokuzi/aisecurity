@@ -5,11 +5,6 @@ import { AdminFailedTaskConsole } from "./admin-failed-task-console";
 
 describe("AdminFailedTaskConsole", () => {
   it("loads and renders failed tasks", async () => {
-    window.localStorage.setItem(
-      "aisecurity.admin_console_context",
-      JSON.stringify({ userId: "it_admin_001", operatorType: "ITAdmin" })
-    );
-
     const apiClient = {
       listFailedTasks: vi.fn().mockResolvedValue({
         data: {
@@ -36,12 +31,29 @@ describe("AdminFailedTaskConsole", () => {
       }),
     };
 
-    render(<AdminFailedTaskConsole apiClient={apiClient} />);
+    render(
+      <AdminFailedTaskConsole
+        apiClient={apiClient}
+        authContext={{
+          userId: "it_admin_001",
+          operatorType: "ITAdmin",
+          source: "dev_stub",
+        }}
+      />
+    );
 
     await waitFor(() => {
       expect(apiClient.listFailedTasks).toHaveBeenCalled();
     });
 
+    expect(screen.getAllByText("it_admin_001")).not.toHaveLength(0);
+    expect(screen.getByText(/页面筛选不会覆盖真实身份边界/)).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "管理员 user_id" })).not.toBeInTheDocument();
+    expect(apiClient.listFailedTasks).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({
+        userId: expect.any(String),
+      })
+    );
     expect(await screen.findByText("ctk_failed_001")).toBeInTheDocument();
     expect(screen.getByText(/task_type：/)).toBeInTheDocument();
     expect(screen.getByText(/最近错误：Connector timeout/)).toBeInTheDocument();

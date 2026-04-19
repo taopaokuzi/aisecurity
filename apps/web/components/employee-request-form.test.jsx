@@ -19,14 +19,24 @@ describe("EmployeeRequestForm", () => {
       }),
     };
 
-    render(<EmployeeRequestForm apiClient={apiClient} />);
+    render(
+      <EmployeeRequestForm
+        apiClient={apiClient}
+        authContext={{ userId: "user_001", operatorType: "User", source: "dev_stub" }}
+      />
+    );
 
-    fireEvent.change(screen.getByLabelText("员工 user_id"), {
-      target: { value: "user_001" },
-    });
+    expect(screen.getAllByText("user_001")).not.toHaveLength(0);
+    expect(screen.getByText(/不接受页面手工覆盖/)).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "员工 user_id" })).not.toBeInTheDocument();
+
     fireEvent.change(screen.getByLabelText("Agent ID"), {
       target: { value: "agent_perm_assistant_v1" },
     });
+    expect(
+      JSON.parse(window.localStorage.getItem("aisecurity.employee_request_context"))
+    ).not.toHaveProperty("userId");
+
     fireEvent.change(screen.getByLabelText("Delegation ID"), {
       target: { value: "dlg_123" },
     });
@@ -38,7 +48,6 @@ describe("EmployeeRequestForm", () => {
 
     await waitFor(() => {
       expect(apiClient.submitPermissionRequest).toHaveBeenCalledWith({
-        userId: "user_001",
         agentId: "agent_perm_assistant_v1",
         delegationId: "dlg_123",
         conversationId: "",

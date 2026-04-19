@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { evaluatePermissionRequestAsSystem } from "../../../../../../lib/employee-request-api";
+import { evaluatePermissionRequestAsTrustedService } from "../../../../../../lib/employee-request-api";
 
 export async function POST(_request, { params }) {
   try {
-    const result = await evaluatePermissionRequestAsSystem(params.requestId);
+    const result = await evaluatePermissionRequestAsTrustedService(params.requestId);
     return NextResponse.json(result.payload, { status: result.status });
   } catch (error) {
     return NextResponse.json(

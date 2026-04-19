@@ -5,10 +5,6 @@ import { AdminCompensationConsole } from "./admin-compensation-console";
 
 describe("AdminCompensationConsole", () => {
   it("retries an allowed failed task", async () => {
-    window.localStorage.setItem(
-      "aisecurity.admin_console_context",
-      JSON.stringify({ userId: "it_admin_001", operatorType: "ITAdmin" })
-    );
     window.confirm = vi.fn().mockReturnValue(true);
 
     const apiClient = {
@@ -48,9 +44,21 @@ describe("AdminCompensationConsole", () => {
       }),
     };
 
-    render(<AdminCompensationConsole apiClient={apiClient} />);
+    render(
+      <AdminCompensationConsole
+        apiClient={apiClient}
+        authContext={{
+          userId: "it_admin_001",
+          operatorType: "ITAdmin",
+          source: "dev_stub",
+        }}
+      />
+    );
 
     expect(await screen.findByText("ctk_failed_001")).toBeInTheDocument();
+    expect(screen.getAllByText("it_admin_001")).not.toHaveLength(0);
+    expect(screen.getByText(/页面不会透传任意输入身份/)).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "管理员 user_id" })).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText("例如 Manual retry after connector recovery"), {
       target: { value: "Manual retry after connector recovery" },
@@ -61,8 +69,6 @@ describe("AdminCompensationConsole", () => {
       expect(window.confirm).toHaveBeenCalled();
       expect(apiClient.retryConnectorTask).toHaveBeenCalledWith({
         taskId: "ctk_failed_001",
-        userId: "it_admin_001",
-        operatorType: "ITAdmin",
         reason: "Manual retry after connector recovery",
       });
     });
@@ -72,11 +78,6 @@ describe("AdminCompensationConsole", () => {
   });
 
   it("shows a clear hint when retry is not available", async () => {
-    window.localStorage.setItem(
-      "aisecurity.admin_console_context",
-      JSON.stringify({ userId: "it_admin_001", operatorType: "ITAdmin" })
-    );
-
     const apiClient = {
       listFailedTasks: vi.fn().mockResolvedValue({
         data: {
@@ -101,7 +102,16 @@ describe("AdminCompensationConsole", () => {
       retryConnectorTask: vi.fn(),
     };
 
-    render(<AdminCompensationConsole apiClient={apiClient} />);
+    render(
+      <AdminCompensationConsole
+        apiClient={apiClient}
+        authContext={{
+          userId: "it_admin_001",
+          operatorType: "ITAdmin",
+          source: "dev_stub",
+        }}
+      />
+    );
 
     expect(await screen.findByText("ctk_done_001")).toBeInTheDocument();
     expect(

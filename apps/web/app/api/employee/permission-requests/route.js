@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import {
   createEmployeePermissionRequest,
-  evaluatePermissionRequestAsSystem,
+  evaluatePermissionRequestAsTrustedService,
   listPermissionRequests,
 } from "../../../../lib/employee-request-api";
 
@@ -20,14 +20,9 @@ function missingField(field) {
 
 export async function GET(request) {
   const searchParams = request.nextUrl.searchParams;
-  const userId = searchParams.get("userId");
-  if (!userId) {
-    return missingField("userId");
-  }
 
   try {
     const result = await listPermissionRequests({
-      userId,
       page: Number(searchParams.get("page") ?? "1"),
       pageSize: Number(searchParams.get("pageSize") ?? "20"),
       requestStatus: searchParams.get("requestStatus") ?? undefined,
@@ -49,11 +44,7 @@ export async function GET(request) {
 
 export async function POST(request) {
   const body = await request.json();
-  const { userId, agentId, delegationId, conversationId, message } = body;
-
-  if (!userId) {
-    return missingField("userId");
-  }
+  const { agentId, delegationId, conversationId, message } = body;
   if (!agentId) {
     return missingField("agentId");
   }
@@ -66,7 +57,6 @@ export async function POST(request) {
 
   try {
     const createResult = await createEmployeePermissionRequest({
-      userId,
       agentId,
       delegationId,
       conversationId,
@@ -82,7 +72,9 @@ export async function POST(request) {
     let evaluationError = null;
 
     if (permissionRequestId) {
-      const evaluationResult = await evaluatePermissionRequestAsSystem(permissionRequestId);
+      const evaluationResult = await evaluatePermissionRequestAsTrustedService(
+        permissionRequestId
+      );
       if (evaluationResult.status >= 400) {
         evaluationError = evaluationResult.payload?.error ?? {
           code: "EVALUATION_FAILED",

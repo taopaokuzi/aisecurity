@@ -55,10 +55,8 @@ export const employeeRequestBrowserClient = {
     });
   },
 
-  getPermissionRequestDetail({ requestId, userId }) {
-    return request(`/api/employee/permission-requests/${requestId}`, {
-      searchParams: { userId },
-    });
+  getPermissionRequestDetail({ requestId }) {
+    return request(`/api/employee/permission-requests/${requestId}`);
   },
 
   evaluatePermissionRequest({ requestId }) {

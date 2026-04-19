@@ -57,7 +57,7 @@ export const adminBrowserClient = {
   retryConnectorTask(input) {
     return request(`/api/admin/connector-tasks/${input.taskId}/retry`, {
       method: "POST",
-      body: input,
+      body: { reason: input.reason },
     });
   },
 };

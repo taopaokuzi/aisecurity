@@ -1,8 +1,10 @@
 import { AdminAuditConsole } from "../../../components/admin-audit-console";
 import { AdminShell } from "../../../components/admin-shell";
 import styles from "../../../components/employee-request-ui.module.css";
+import { getAdminSessionContext } from "../../../lib/web-auth-context";
 
 export default function AdminAuditPage() {
+  const authContext = getAdminSessionContext();
   return (
     <AdminShell
       eyebrow="Audit Search"
@@ -20,7 +22,7 @@ export default function AdminAuditPage() {
         </>
       }
     >
-      <AdminAuditConsole />
+      <AdminAuditConsole authContext={authContext} />
     </AdminShell>
   );
 }

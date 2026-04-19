@@ -8,47 +8,24 @@ import { formatDateTime, formatValue, getFailureSummary } from "../lib/admin-pre
 import { StatusPill } from "./status-pill";
 import styles from "./employee-request-ui.module.css";
 
-const STORAGE_KEY = "aisecurity.admin_console_context";
 const PAGE_SIZE = 10;
+const DEFAULT_AUTH_CONTEXT = {
+  userId: "it_admin_001",
+  operatorType: "ITAdmin",
+  source: "dev_stub",
+};
 
-function readAdminContext() {
-  if (typeof window === "undefined") {
-    return { userId: "", operatorType: "ITAdmin" };
+function getContextDescription(authContext) {
+  if (authContext.source === "dev_stub") {
+    return "列表查询使用 Web 服务端受控的开发 stub 管理员身份，页面筛选不会覆盖真实身份边界。";
   }
-
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "{}");
-    return {
-      userId: parsed.userId ?? "",
-      operatorType: parsed.operatorType ?? "ITAdmin",
-    };
-  } catch {
-    return { userId: "", operatorType: "ITAdmin" };
-  }
+  return "列表查询使用服务端会话或统一身份注入层提供的管理员身份。";
 }
 
-function persistAdminContext(nextContext) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    const current = readAdminContext();
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        ...current,
-        ...nextContext,
-      })
-    );
-  } catch {
-    // Ignore storage failures and keep the UI interactive.
-  }
-}
-
-export function AdminFailedTaskConsole({ apiClient = adminBrowserClient }) {
-  const [userId, setUserId] = useState("");
-  const [operatorType, setOperatorType] = useState("ITAdmin");
+export function AdminFailedTaskConsole({
+  apiClient = adminBrowserClient,
+  authContext = DEFAULT_AUTH_CONTEXT,
+}) {
   const [taskType, setTaskType] = useState("");
   const [taskStatus, setTaskStatus] = useState("");
   const [requestId, setRequestId] = useState("");
@@ -59,21 +36,12 @@ export function AdminFailedTaskConsole({ apiClient = adminBrowserClient }) {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
 
-  async function loadFailedTasks(nextPage = 1, nextUserId = userId, nextOperatorType = operatorType) {
-    if (!nextUserId.trim()) {
-      setError("请先填写管理员 user_id，再查询失败任务。");
-      setItems([]);
-      setTotal(0);
-      return;
-    }
-
+  async function loadFailedTasks(nextPage = 1) {
     setLoading(true);
     setError("");
 
     try {
       const payload = await apiClient.listFailedTasks({
-        userId: nextUserId.trim(),
-        operatorType: nextOperatorType,
         taskType,
         taskStatus,
         requestId,
@@ -94,20 +62,11 @@ export function AdminFailedTaskConsole({ apiClient = adminBrowserClient }) {
   }
 
   useEffect(() => {
-    const context = readAdminContext();
-    setUserId(context.userId);
-    setOperatorType(context.operatorType);
-    if (!context.userId) {
-      return;
-    }
-
     let cancelled = false;
 
     async function loadInitialFailedTasks() {
       try {
         const payload = await apiClient.listFailedTasks({
-          userId: context.userId,
-          operatorType: context.operatorType,
           taskType: "",
           taskStatus: "",
           requestId: "",
@@ -146,6 +105,14 @@ export function AdminFailedTaskConsole({ apiClient = adminBrowserClient }) {
 
   return (
     <section className={styles.tableCard}>
+      <div className={styles.callout}>
+        <p className={styles.calloutTitle}>当前管理上下文</p>
+        <p className={styles.calloutText}>
+          当前以 <code>{authContext.userId}</code> / <code>{authContext.operatorType}</code> 查看失败任务。
+          {getContextDescription(authContext)}
+        </p>
+      </div>
+
       <div className={styles.listHeader}>
         <div>
           <h2 className={styles.sectionTitle}>失败任务列表</h2>
@@ -165,32 +132,16 @@ export function AdminFailedTaskConsole({ apiClient = adminBrowserClient }) {
       </div>
 
       <div className={styles.fieldGrid}>
-        <label className={styles.fieldLabel}>
-          <span>管理员 user_id</span>
-          <input
-            className={styles.input}
-            value={userId}
-            onChange={(event) => {
-              setUserId(event.target.value);
-              persistAdminContext({ userId: event.target.value });
-            }}
-            placeholder="例如 it_admin_001"
-          />
-        </label>
-        <label className={styles.fieldLabel}>
-          <span>操作人类型</span>
-          <select
-            className={styles.select}
-            value={operatorType}
-            onChange={(event) => {
-              setOperatorType(event.target.value);
-              persistAdminContext({ operatorType: event.target.value });
-            }}
-          >
-            <option value="ITAdmin">ITAdmin</option>
-            <option value="SecurityAdmin">SecurityAdmin</option>
-          </select>
-        </label>
+        <div className={styles.detailItem}>
+          <span className={styles.detailTerm}>管理员 user_id</span>
+          <p className={`${styles.detailValue} ${styles.codeValue}`}>{authContext.userId}</p>
+        </div>
+        <div className={styles.detailItem}>
+          <span className={styles.detailTerm}>操作人类型</span>
+          <p className={`${styles.detailValue} ${styles.codeValue}`}>
+            {authContext.operatorType}
+          </p>
+        </div>
         <label className={styles.fieldLabel}>
           <span>task_type</span>
           <select
@@ -243,7 +194,7 @@ export function AdminFailedTaskConsole({ apiClient = adminBrowserClient }) {
       {!error && !items.length ? (
         <div className={styles.emptyState}>
           <p className={styles.calloutTitle}>暂无失败任务</p>
-          <p className={styles.calloutText}>填写管理员上下文后即可定位失败链路。</p>
+          <p className={styles.calloutText}>可以直接按任务条件定位失败链路，无需页面手工切换管理员身份。</p>
         </div>
       ) : null}
 

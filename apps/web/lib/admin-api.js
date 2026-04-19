@@ -1,5 +1,7 @@
 import "server-only";
 
+import { getAdminSessionContext } from "./web-auth-context";
+
 const API_BASE_URL =
   process.env.API_BASE_URL ??
   process.env.NEXT_PUBLIC_API_BASE_URL ??
@@ -42,17 +44,16 @@ async function callBackend(path, { method = "GET", body, headers = {} } = {}) {
   };
 }
 
-function buildAdminHeaders({ userId, operatorType, requestId }) {
+function buildAdminHeaders({ requestId }) {
+  const context = getAdminSessionContext();
   return {
     "X-Request-Id": requestId ?? buildRequestId("webadmin"),
-    "X-User-Id": userId,
-    "X-Operator-Type": operatorType,
+    "X-User-Id": context.userId,
+    "X-Operator-Type": context.operatorType,
   };
 }
 
 export async function listAuditRecords({
-  userId,
-  operatorType,
   requestId,
   eventType,
   actorType,
@@ -80,16 +81,12 @@ export async function listAuditRecords({
 
   return callBackend(`/audit-records?${searchParams.toString()}`, {
     headers: buildAdminHeaders({
-      userId,
-      operatorType,
       requestId: buildRequestId("webadmin_audit"),
     }),
   });
 }
 
 export async function listFailedTasks({
-  userId,
-  operatorType,
   taskType,
   taskStatus,
   requestId,
@@ -117,19 +114,15 @@ export async function listFailedTasks({
 
   return callBackend(`/admin/failed-tasks?${searchParams.toString()}`, {
     headers: buildAdminHeaders({
-      userId,
-      operatorType,
       requestId: buildRequestId("webadmin_failed"),
     }),
   });
 }
 
-export async function retryConnectorTask({ taskId, userId, operatorType, reason }) {
+export async function retryConnectorTask({ taskId, reason }) {
   return callBackend(`/admin/connector-tasks/${taskId}/retry`, {
     method: "POST",
     headers: buildAdminHeaders({
-      userId,
-      operatorType,
       requestId: buildRequestId("webadmin_retry"),
     }),
     body: { reason },

@@ -9,10 +9,15 @@ import styles from "./employee-request-ui.module.css";
 
 const STORAGE_KEY = "aisecurity.employee_request_context";
 const DEFAULT_CONTEXT = {
-  userId: "",
   agentId: "",
   delegationId: "",
   conversationId: "",
+};
+
+const DEFAULT_AUTH_CONTEXT = {
+  userId: "user_001",
+  operatorType: "User",
+  source: "dev_stub",
 };
 
 function readStoredContext() {
@@ -26,7 +31,12 @@ function readStoredContext() {
       return DEFAULT_CONTEXT;
     }
 
-    return { ...DEFAULT_CONTEXT, ...JSON.parse(value) };
+    const parsed = JSON.parse(value);
+    return {
+      agentId: parsed.agentId ?? DEFAULT_CONTEXT.agentId,
+      delegationId: parsed.delegationId ?? DEFAULT_CONTEXT.delegationId,
+      conversationId: parsed.conversationId ?? DEFAULT_CONTEXT.conversationId,
+    };
   } catch {
     return DEFAULT_CONTEXT;
   }
@@ -37,12 +47,20 @@ function writeStoredContext(context) {
     return;
   }
 
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(context));
+  window.localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      agentId: context.agentId,
+      delegationId: context.delegationId,
+      conversationId: context.conversationId,
+    })
+  );
 }
 
 export function EmployeeRequestForm({
   apiClient = employeeRequestBrowserClient,
   initialContext = DEFAULT_CONTEXT,
+  authContext = DEFAULT_AUTH_CONTEXT,
 }) {
   const [context, setContext] = useState(initialContext);
   const [message, setMessage] = useState("");
@@ -70,7 +88,6 @@ export function EmployeeRequestForm({
 
     try {
       const payload = await apiClient.submitPermissionRequest({
-        userId: context.userId.trim(),
         agentId: context.agentId.trim(),
         delegationId: context.delegationId.trim(),
         conversationId: context.conversationId.trim(),
@@ -88,22 +105,25 @@ export function EmployeeRequestForm({
     <section className={styles.surfaceCard}>
       <h2 className={styles.sectionTitle}>提交新的权限申请</h2>
       <p className={styles.sectionHint}>
-        页面会把员工身份上下文、自然语言申请和委托凭证一起提交到后端接口，并尝试立即同步评估结果。
+        页面只展示当前已认证员工上下文；真正的用户身份由 Web 服务端受控注入，再把自然语言申请和委托凭证提交给后端。
       </p>
+
+      <div className={styles.callout}>
+        <p className={styles.calloutTitle}>当前员工上下文</p>
+        <p className={styles.calloutText}>
+          当前以 <code>{authContext.userId}</code> / <code>{authContext.operatorType}</code> 提交申请。
+          {authContext.source === "dev_stub"
+            ? " 这是 Web 服务端提供的受控开发 stub 身份，不接受页面手工覆盖。"
+            : " 这是由服务端会话或统一身份注入层提供的已认证身份。"}
+        </p>
+      </div>
 
       <form onSubmit={handleSubmit}>
         <div className={styles.contextGrid}>
-          <label className={styles.fieldLabel}>
-            <span>员工 user_id</span>
-            <input
-              className={styles.input}
-              name="user_id"
-              value={context.userId}
-              onChange={(event) => updateContext("userId", event.target.value)}
-              placeholder="例如 user_001"
-              required
-            />
-          </label>
+          <div className={styles.detailItem}>
+            <span className={styles.detailTerm}>员工 user_id</span>
+            <p className={`${styles.detailValue} ${styles.codeValue}`}>{authContext.userId}</p>
+          </div>
           <label className={styles.fieldLabel}>
             <span>Agent ID</span>
             <input
@@ -193,7 +213,7 @@ export function EmployeeRequestForm({
             <div className={styles.callout}>
               <p className={styles.calloutTitle}>评估结果暂未同步</p>
               <p className={styles.calloutText}>
-                已成功创建申请，但评估步骤返回了 <code>{result.evaluation_error.code}</code>。详情页仍可继续查看原始状态，并可再次触发同步。
+                已成功创建申请，但服务端受控评估步骤返回了 <code>{result.evaluation_error.code}</code>。详情页仍可继续查看原始状态，并可再次触发同步。
               </p>
             </div>
           ) : null}

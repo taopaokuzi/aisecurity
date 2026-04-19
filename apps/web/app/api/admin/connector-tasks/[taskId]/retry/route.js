@@ -16,14 +16,7 @@ function missingField(field) {
 
 export async function POST(request, { params }) {
   const body = await request.json();
-  const { userId, operatorType, reason } = body;
-
-  if (!userId) {
-    return missingField("userId");
-  }
-  if (!operatorType) {
-    return missingField("operatorType");
-  }
+  const { reason } = body;
   if (!reason) {
     return missingField("reason");
   }
@@ -31,8 +24,6 @@ export async function POST(request, { params }) {
   try {
     const result = await retryConnectorTask({
       taskId: params.taskId,
-      userId,
-      operatorType,
       reason,
     });
     return NextResponse.json(result.payload, { status: result.status });

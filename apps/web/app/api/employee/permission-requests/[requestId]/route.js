@@ -5,24 +5,10 @@ import {
   getPermissionRequestEvaluation,
 } from "../../../../../lib/employee-request-api";
 
-export async function GET(request, { params }) {
-  const userId = request.nextUrl.searchParams.get("userId");
-  if (!userId) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "BAD_REQUEST",
-          message: "userId is required",
-        },
-      },
-      { status: 400 }
-    );
-  }
-
+export async function GET(_request, { params }) {
   try {
     const detailResult = await getPermissionRequestDetail({
       permissionRequestId: params.requestId,
-      userId,
     });
 
     if (detailResult.status >= 400) {
@@ -31,7 +17,6 @@ export async function GET(request, { params }) {
 
     const evaluationResult = await getPermissionRequestEvaluation({
       permissionRequestId: params.requestId,
-      userId,
     });
 
     return NextResponse.json(

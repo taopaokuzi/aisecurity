@@ -1,8 +1,10 @@
 import { EmployeeRequestDetail } from "../../../../components/employee-request-detail";
 import { EmployeeShell } from "../../../../components/employee-shell";
 import styles from "../../../../components/employee-request-ui.module.css";
+import { getEmployeeSessionContext } from "../../../../lib/web-auth-context";
 
 export default function EmployeeRequestDetailPage({ params }) {
+  const authContext = getEmployeeSessionContext();
   return (
     <EmployeeShell
       eyebrow="TASK-016 Employee UI"
@@ -20,7 +22,7 @@ export default function EmployeeRequestDetailPage({ params }) {
         </>
       }
     >
-      <EmployeeRequestDetail requestId={params.requestId} />
+      <EmployeeRequestDetail authContext={authContext} requestId={params.requestId} />
     </EmployeeShell>
   );
 }

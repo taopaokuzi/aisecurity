@@ -1,8 +1,10 @@
 import { AdminCompensationConsole } from "../../../components/admin-compensation-console";
 import { AdminShell } from "../../../components/admin-shell";
 import styles from "../../../components/employee-request-ui.module.css";
+import { getAdminSessionContext } from "../../../lib/web-auth-context";
 
 export default function AdminCompensationPage() {
+  const authContext = getAdminSessionContext();
   return (
     <AdminShell
       eyebrow="Compensation"
@@ -20,7 +22,7 @@ export default function AdminCompensationPage() {
         </>
       }
     >
-      <AdminCompensationConsole />
+      <AdminCompensationConsole authContext={authContext} />
     </AdminShell>
   );
 }

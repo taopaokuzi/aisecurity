@@ -12,58 +12,35 @@ import {
 import { StatusPill } from "./status-pill";
 import styles from "./employee-request-ui.module.css";
 
-const STORAGE_KEY = "aisecurity.employee_request_context";
+const DEFAULT_AUTH_CONTEXT = {
+  userId: "user_001",
+  operatorType: "User",
+  source: "dev_stub",
+};
 
-function readUserId() {
-  if (typeof window === "undefined") {
-    return "";
-  }
-
-  try {
-    return JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "{}").userId ?? "";
-  } catch {
-    return "";
-  }
-}
-
-async function queryPermissionRequestDetail(apiClient, { requestId, userId }) {
+async function queryPermissionRequestDetail(apiClient, { requestId }) {
   return apiClient.getPermissionRequestDetail({
     requestId,
-    userId,
   });
 }
 
 export function EmployeeRequestDetail({
   requestId,
   apiClient = employeeRequestBrowserClient,
+  authContext = DEFAULT_AUTH_CONTEXT,
 }) {
-  const [userId, setUserId] = useState("");
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
   const [detail, setDetail] = useState(null);
 
-  useEffect(() => {
-    const storedUserId = readUserId();
-    if (storedUserId) {
-      setUserId(storedUserId);
-    }
-  }, []);
-
-  async function loadDetail(nextUserId = userId) {
-    if (!nextUserId.trim()) {
-      setError("请先填写员工 user_id，再查看申请详情。");
-      setDetail(null);
-      return;
-    }
-
+  async function loadDetail() {
     setLoading(true);
     setError("");
 
     try {
       const payload = await queryPermissionRequestDetail(apiClient, {
         requestId,
-        userId: nextUserId.trim(),
       });
       setDetail(payload.data);
     } catch (loadError) {
@@ -75,10 +52,6 @@ export function EmployeeRequestDetail({
   }
 
   useEffect(() => {
-    if (!userId) {
-      return;
-    }
-
     let cancelled = false;
 
     async function syncDetail() {
@@ -88,7 +61,6 @@ export function EmployeeRequestDetail({
       try {
         const payload = await queryPermissionRequestDetail(apiClient, {
           requestId,
-          userId,
         });
         if (!cancelled) {
           setDetail(payload.data);
@@ -110,7 +82,7 @@ export function EmployeeRequestDetail({
     return () => {
       cancelled = true;
     };
-  }, [apiClient, requestId, userId]);
+  }, [apiClient, requestId]);
 
   async function handleSyncEvaluation() {
     setSyncing(true);
@@ -126,21 +98,6 @@ export function EmployeeRequestDetail({
     }
   }
 
-  function handleUserIdChange(value) {
-    setUserId(value);
-    if (typeof window !== "undefined") {
-      try {
-        const current = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "{}");
-        window.localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify({ ...current, userId: value })
-        );
-      } catch {
-        // Ignore storage write failures and keep the UI interactive.
-      }
-    }
-  }
-
   const request = detail?.request;
   const evaluation = detail?.evaluation;
   const riskMeta = getRiskMeta(evaluation?.risk_level ?? request?.risk_level);
@@ -149,6 +106,14 @@ export function EmployeeRequestDetail({
   return (
     <>
       <section className={styles.surfaceCard}>
+        <div className={styles.callout}>
+          <p className={styles.calloutTitle}>当前员工上下文</p>
+          <p className={styles.calloutText}>
+            当前以 <code>{authContext.userId}</code> / <code>{authContext.operatorType}</code> 查看详情。
+            详情刷新和评估同步都由服务端受控上下文发起，不再依赖页面手工输入身份。
+          </p>
+        </div>
+
         <div className={styles.listHeader}>
           <div>
             <h2 className={styles.sectionTitle}>申请详情</h2>
@@ -177,15 +142,10 @@ export function EmployeeRequestDetail({
         </div>
 
         <div className={styles.fieldGrid}>
-          <label className={styles.fieldLabel}>
-            <span>员工 user_id</span>
-            <input
-              className={styles.input}
-              value={userId}
-              onChange={(event) => handleUserIdChange(event.target.value)}
-              placeholder="例如 user_001"
-            />
-          </label>
+          <div className={styles.detailItem}>
+            <span className={styles.detailTerm}>员工 user_id</span>
+            <p className={`${styles.detailValue} ${styles.codeValue}`}>{authContext.userId}</p>
+          </div>
           <div className={styles.detailItem}>
             <span className={styles.detailTerm}>申请单 ID</span>
             <p className={`${styles.detailValue} ${styles.codeValue}`}>{requestId}</p>
@@ -260,7 +220,7 @@ export function EmployeeRequestDetail({
               <li>申请创建使用员工上下文调用 `POST /permission-requests`。</li>
               <li>状态页按本人维度查询 `GET /permission-requests`。</li>
               <li>详情页同时读取 `GET /permission-requests/{'{id}'}` 和评估结果。</li>
-              <li>如果评估尚未落库，可在详情页再次触发同步。</li>
+              <li>如果评估尚未落库，可在详情页通过受控服务端上下文再次触发同步。</li>
             </ul>
           </section>
         </div>

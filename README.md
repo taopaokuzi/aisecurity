@@ -189,6 +189,18 @@ Task 18 完成了 Mock Feishu 与集成 / E2E 用例：
 - 在 `packages/application/admin_tasks.py` 中补了 session revoke retry 的事务内 flush，避免补偿重试后立即处理时读不到新任务
 - 在任务总表中把 `TASK-018` 标记为 `DONE / PASS`
 
+## Task 19
+
+Task 19 完成了发布前收口与上线检查：
+
+- 在 `docs/release` 中新增测试矩阵和发布检查清单，汇总单元、集成、E2E、前端测试、构建结果、上线阻断项和残余风险
+- 关闭 Web 管理端身份边界阻断项：页面不再手工填写并透传 `user_id/operator_type`，改由 Next 服务端 route 使用受控 admin context 注入
+- 关闭员工端评估边界阻断项：浏览器不再伪装 `System` 触发评估，改由受控服务端 evaluation context 触发
+- 在 `apps/web/lib/web-auth-context.js` 中新增本地/测试用的受控身份上下文入口，为生产接入真实 SSO / Gateway 保留替换点
+- 更新员工端和管理端组件、浏览器客户端、服务端代理和测试，覆盖伪造身份参数被忽略、评估走受控服务端 hook、retry 与审计查询仍可用
+- 最终结论为 `PASS WITH RISKS`，允许进入上线准备，但生产必须先接入可信身份注入层，禁止不可信客户端直连后端伪造身份头
+- 在任务总表中把 `TASK-019` 标记为 `DONE / PASS`
+
 ## 环境准备
 
 1. 安装 Python 3.11、Node.js 20+、Docker、Docker Compose。

@@ -5,11 +5,6 @@ import { AdminAuditConsole } from "./admin-audit-console";
 
 describe("AdminAuditConsole", () => {
   it("queries and renders audit records", async () => {
-    window.localStorage.setItem(
-      "aisecurity.admin_console_context",
-      JSON.stringify({ userId: "sec_admin_001", operatorType: "SecurityAdmin" })
-    );
-
     const apiClient = {
       listAuditRecords: vi.fn().mockResolvedValue({
         data: {
@@ -34,11 +29,24 @@ describe("AdminAuditConsole", () => {
       }),
     };
 
-    render(<AdminAuditConsole apiClient={apiClient} />);
+    render(
+      <AdminAuditConsole
+        apiClient={apiClient}
+        authContext={{
+          userId: "sec_admin_001",
+          operatorType: "SecurityAdmin",
+          source: "dev_stub",
+        }}
+      />
+    );
 
     await waitFor(() => {
       expect(apiClient.listAuditRecords).toHaveBeenCalled();
     });
+
+    expect(screen.getAllByText("sec_admin_001")).not.toHaveLength(0);
+    expect(screen.getByText(/页面输入不会决定真实管理员身份/)).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "管理员 user_id" })).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText("例如 req_audit_chain_001"), {
       target: { value: "req_001" },
@@ -48,9 +56,12 @@ describe("AdminAuditConsole", () => {
     await waitFor(() => {
       expect(apiClient.listAuditRecords).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          userId: "sec_admin_001",
-          operatorType: "SecurityAdmin",
           requestId: "req_001",
+        })
+      );
+      expect(apiClient.listAuditRecords).not.toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          userId: expect.any(String),
         })
       );
     });

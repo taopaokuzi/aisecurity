@@ -5,11 +5,6 @@ import { EmployeeRequestDetail } from "./employee-request-detail";
 
 describe("EmployeeRequestDetail", () => {
   it("renders the permission request detail and evaluation fields", async () => {
-    window.localStorage.setItem(
-      "aisecurity.employee_request_context",
-      JSON.stringify({ userId: "user_001" })
-    );
-
     const apiClient = {
       getPermissionRequestDetail: vi.fn().mockResolvedValue({
         data: {
@@ -40,15 +35,23 @@ describe("EmployeeRequestDetail", () => {
       evaluatePermissionRequest: vi.fn(),
     };
 
-    render(<EmployeeRequestDetail requestId="req_001" apiClient={apiClient} />);
+    render(
+      <EmployeeRequestDetail
+        requestId="req_001"
+        apiClient={apiClient}
+        authContext={{ userId: "user_001", operatorType: "User", source: "dev_stub" }}
+      />
+    );
 
     await waitFor(() => {
       expect(apiClient.getPermissionRequestDetail).toHaveBeenCalledWith({
         requestId: "req_001",
-        userId: "user_001",
       });
     });
 
+    expect(screen.getAllByText("user_001")).not.toHaveLength(0);
+    expect(screen.getByText(/不再依赖页面手工输入身份/)).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "员工 user_id" })).not.toBeInTheDocument();
     expect(await screen.findByText("申请与评估字段")).toBeInTheDocument();
     expect(screen.getByText("我需要查看销售部 Q3 报表")).toBeInTheDocument();
     expect(screen.getByText("sales.q3_report")).toBeInTheDocument();

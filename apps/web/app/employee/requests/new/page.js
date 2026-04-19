@@ -1,8 +1,21 @@
 import { EmployeeRequestForm } from "../../../../components/employee-request-form";
 import { EmployeeShell } from "../../../../components/employee-shell";
 import styles from "../../../../components/employee-request-ui.module.css";
+import { getEmployeeRequestDefaults } from "../../../../lib/web-auth-context";
 
 export default function EmployeeRequestNewPage() {
+  const requestDefaults = getEmployeeRequestDefaults();
+  const authContext = {
+    userId: requestDefaults.userId,
+    operatorType: requestDefaults.operatorType,
+    source: requestDefaults.source,
+  };
+  const initialContext = {
+    agentId: requestDefaults.agentId,
+    delegationId: requestDefaults.delegationId,
+    conversationId: requestDefaults.conversationId,
+  };
+
   return (
     <EmployeeShell
       eyebrow="TASK-016 Employee UI"
@@ -20,7 +33,7 @@ export default function EmployeeRequestNewPage() {
         </>
       }
     >
-      <EmployeeRequestForm />
+      <EmployeeRequestForm authContext={authContext} initialContext={initialContext} />
     </EmployeeShell>
   );
 }

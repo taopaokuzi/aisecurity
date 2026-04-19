@@ -8,23 +8,14 @@ import { formatDateTime, summarizeNextStep } from "../lib/employee-request-prese
 import { StatusPill } from "./status-pill";
 import styles from "./employee-request-ui.module.css";
 
-const STORAGE_KEY = "aisecurity.employee_request_context";
+const DEFAULT_AUTH_CONTEXT = {
+  userId: "user_001",
+  operatorType: "User",
+  source: "dev_stub",
+};
 
-function readUserId() {
-  if (typeof window === "undefined") {
-    return "";
-  }
-
-  try {
-    return JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "{}").userId ?? "";
-  } catch {
-    return "";
-  }
-}
-
-async function queryPermissionRequests(apiClient, { userId, requestStatus, approvalStatus }) {
+async function queryPermissionRequests(apiClient, { requestStatus, approvalStatus }) {
   return apiClient.listPermissionRequests({
-    userId,
     page: "1",
     pageSize: "20",
     requestStatus,
@@ -34,8 +25,8 @@ async function queryPermissionRequests(apiClient, { userId, requestStatus, appro
 
 export function EmployeeRequestList({
   apiClient = employeeRequestBrowserClient,
+  authContext = DEFAULT_AUTH_CONTEXT,
 }) {
-  const [userId, setUserId] = useState("");
   const [requestStatus, setRequestStatus] = useState("");
   const [approvalStatus, setApprovalStatus] = useState("");
   const [loading, setLoading] = useState(false);
@@ -43,26 +34,12 @@ export function EmployeeRequestList({
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
 
-  useEffect(() => {
-    const storedUserId = readUserId();
-    if (storedUserId) {
-      setUserId(storedUserId);
-    }
-  }, []);
-
-  async function loadRequests(nextUserId = userId) {
-    if (!nextUserId.trim()) {
-      setError("请先填写员工 user_id，再查询本人申请。");
-      setItems([]);
-      return;
-    }
-
+  async function loadRequests() {
     setLoading(true);
     setError("");
 
     try {
       const payload = await queryPermissionRequests(apiClient, {
-        userId: nextUserId.trim(),
         requestStatus,
         approvalStatus,
       });
@@ -78,10 +55,6 @@ export function EmployeeRequestList({
   }
 
   useEffect(() => {
-    if (!userId) {
-      return;
-    }
-
     let cancelled = false;
 
     async function syncRequests() {
@@ -90,7 +63,6 @@ export function EmployeeRequestList({
 
       try {
         const payload = await queryPermissionRequests(apiClient, {
-          userId,
           requestStatus,
           approvalStatus,
         });
@@ -116,25 +88,18 @@ export function EmployeeRequestList({
     return () => {
       cancelled = true;
     };
-  }, [apiClient, approvalStatus, requestStatus, userId]);
-
-  function handleUserIdChange(value) {
-    setUserId(value);
-    if (typeof window !== "undefined") {
-      try {
-        const current = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "{}");
-        window.localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify({ ...current, userId: value })
-        );
-      } catch {
-        // Ignore storage write failures and keep the UI interactive.
-      }
-    }
-  }
+  }, [apiClient, approvalStatus, requestStatus]);
 
   return (
     <section className={styles.tableCard}>
+      <div className={styles.callout}>
+        <p className={styles.calloutTitle}>当前员工上下文</p>
+        <p className={styles.calloutText}>
+          当前以 <code>{authContext.userId}</code> / <code>{authContext.operatorType}</code> 查询本人申请。
+          页面不会再通过手工输入 user_id 来决定真实查询身份。
+        </p>
+      </div>
+
       <div className={styles.listHeader}>
         <div>
           <h2 className={styles.sectionTitle}>我的申请状态</h2>
@@ -151,15 +116,10 @@ export function EmployeeRequestList({
       </div>
 
       <div className={styles.fieldGrid}>
-        <label className={styles.fieldLabel}>
-          <span>员工 user_id</span>
-          <input
-            className={styles.input}
-            value={userId}
-            onChange={(event) => handleUserIdChange(event.target.value)}
-            placeholder="例如 user_001"
-          />
-        </label>
+        <div className={styles.detailItem}>
+          <span className={styles.detailTerm}>员工 user_id</span>
+          <p className={`${styles.detailValue} ${styles.codeValue}`}>{authContext.userId}</p>
+        </div>
         <label className={styles.fieldLabel}>
           <span>申请状态筛选</span>
           <select
@@ -202,11 +162,7 @@ export function EmployeeRequestList({
       {!error && !items.length ? (
         <div className={styles.emptyState}>
           <p className={styles.calloutTitle}>暂无可展示的申请</p>
-          <p className={styles.calloutText}>
-            {userId
-              ? "当前筛选条件下没有查询到记录，可以先去发起一笔申请。"
-              : "先填写员工 user_id，页面就会自动拉取本人申请。"}
-          </p>
+          <p className={styles.calloutText}>当前筛选条件下没有查询到记录，可以先去发起一笔申请。</p>
         </div>
       ) : null}
 
